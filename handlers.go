@@ -1,4 +1,4 @@
-// handlers.go - Optional: Separate file untuk handlers
+// handlers.go
 package main
 
 import (
@@ -10,8 +10,7 @@ import (
 
 // StickerHandler - Handle sticker conversion with proper concurrency
 func (bot *WhatsAppBot) StickerHandler(sender types.JID) string {
-	// Simulate heavy processing that can run concurrently
-	fmt.Printf("🎨 [CONCURRENT] Processing sticker for %s\n", sender.User)
+	fmt.Printf("CONCURRENT Processing sticker for %s\n", sender.User)
 
 	// Real implementation would:
 	// 1. Download image from WhatsApp
@@ -22,23 +21,23 @@ func (bot *WhatsAppBot) StickerHandler(sender types.JID) string {
 	processingTime := time.Duration(2000+(len(sender.User)%1000)) * time.Millisecond
 	time.Sleep(processingTime)
 
-	return "✅ stiker berhasil dibuat!"
+	return "stiker berhasil dibuat"
 }
 
 // ToImageHandler - Convert sticker to image
 func (bot *WhatsAppBot) ToImageHandler(sender types.JID) string {
-	fmt.Printf("🖼️ [CONCURRENT] Converting sticker to image for %s\n", sender.User)
+	fmt.Printf("CONCURRENT Converting sticker to image for %s\n", sender.User)
 
 	// Simulate sticker to image conversion
 	processingTime := time.Duration(1500+(len(sender.User)%500)) * time.Millisecond
 	time.Sleep(processingTime)
 
-	return "✅ gambar berhasil dibuat!"
+	return "gambar berhasil dibuat"
 }
 
 // TagAllHandler - Handle tag all with concurrent safety
 func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID) string {
-	fmt.Printf("👥 [CONCURRENT] Getting group members for %s\n", chatJID.User)
+	fmt.Printf("CONCURRENT Getting group members for %s\n", chatJID.User)
 
 	// Real implementation would:
 	// 1. Get group info from WhatsApp
@@ -47,8 +46,8 @@ func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID) string {
 
 	time.Sleep(1 * time.Second)
 
-	return `👥 *Mention All*
-Hai semua! Ada yang penting nih.
+	return `Mention All
+Hai semua Ada yang penting nih
 
-*Note:* Untuk implementasi real, bot akan mention semua member grup.`
+Note: Untuk implementasi real bot akan mention semua member grup`
 }
