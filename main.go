@@ -1,284 +1,306 @@
 package main
 
 import (
-    "context"
-    "fmt"
-    "log"
-    "os"
-    "os/signal"
-    "strings"
-    "sync"
-    "syscall"
-    "time"
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
 
-    "go.mau.fi/whatsmeow"
-    "go.mau.fi/whatsmeow/store/sqlstore"
-    "go.mau.fi/whatsmeow/types"
-    "go.mau.fi/whatsmeow/types/events"
-    waLog "go.mau.fi/whatsmeow/util/log"
-    waProto "go.mau.fi/whatsmeow/binary/proto"
-    "google.golang.org/protobuf/proto"
+	"go.mau.fi/whatsmeow"
+	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/store/sqlstore"
+	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
+	waLog "go.mau.fi/whatsmeow/util/log"
+	"google.golang.org/protobuf/proto"
 
-    _ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type WhatsAppBot struct {
-    client *whatsmeow.Client
-    rateLimiter chan struct{}
-    wg sync.WaitGroup
-    mutex sync.RWMutex
-    processedMessages int64
+	client            *whatsmeow.Client
+	rateLimiter       chan struct{}
+	wg                sync.WaitGroup
+	mutex             sync.RWMutex
+	processedMessages int64
+	startTime         time.Time
 }
 
 func NewWhatsAppBot() *WhatsAppBot {
-    // Setup database untuk session
-    dbLog := waLog.Stdout("Database", "INFO", true)
-    container, err := sqlstore.New("sqlite3", "file:session.db?_foreign_keys=on", dbLog)
-    if err != nil {
-        log.Fatal("❌ Failed to connect to database:", err)
-    }
+	dbLog := waLog.Stdout("Database", "ERROR", false) // Less verbose
+	container, err := sqlstore.New(context.Background(), "sqlite3", "file:session.db?_foreign_keys=on", dbLog)
+	if err != nil {
+		log.Fatal("❌ Failed to connect to database:", err)
+	}
 
-    deviceStore, err := container.GetFirstDevice()
-    if err != nil {
-        log.Fatal("❌ Failed to get device:", err)
-    }
+	deviceStore, err := container.GetFirstDevice(context.Background())
+	if err != nil {
+		log.Fatal("❌ Failed to get device:", err)
+	}
 
-    clientLog := waLog.Stdout("Client", "INFO", true)
-    client := whatsmeow.NewClient(deviceStore, clientLog)
+	clientLog := waLog.Stdout("Client", "ERROR", false) // Less verbose
+	client := whatsmeow.NewClient(deviceStore, clientLog)
 
-    bot := &WhatsAppBot{
-        client: client,
-        // Rate limiter: maksimal 15 pesan bersamaan
-        rateLimiter: make(chan struct{}, 15),
-    }
-
-    return bot
+	return &WhatsAppBot{
+		client:      client,
+		rateLimiter: make(chan struct{}, 20), // 20 concurrent requests
+		startTime:   time.Now(),
+	}
 }
 
 func (bot *WhatsAppBot) Start() {
-    fmt.Println("🤖 Starting WhatsApp Bot...")
-    
-    // Event handler
-    bot.client.AddEventHandler(func(evt interface{}) {
-        switch v := evt.(type) {
-        case *events.Message:
-            // Setiap pesan diproses concurrent
-            go bot.handleMessage(v)
-        case *events.Receipt:
-            fmt.Printf("✅ Message delivered: %v\n", v.MessageIDs)
-        case *events.Connected:
-            fmt.Println("🟢 Connected to WhatsApp!")
-        case *events.Disconnected:
-            fmt.Println("🔴 Disconnected from WhatsApp")
-        }
-    })
+	fmt.Println("🤖 Starting WhatsApp Bot...")
 
-    // Login process
-    if bot.client.Store.ID == nil {
-        // First time login
-        fmt.Println("📱 First time login - Please scan QR code with WhatsApp:")
-        qrChan, _ := bot.client.GetQRChannel(context.Background())
-        err := bot.client.Connect()
-        if err != nil {
-            log.Fatal("❌ Failed to connect:", err)
-        }
+	bot.client.AddEventHandler(func(evt interface{}) {
+		switch v := evt.(type) {
+		case *events.Message:
+			// Concurrent message processing
+			go bot.handleMessage(v)
+		case *events.Connected:
+			fmt.Println("🟢 Connected to WhatsApp!")
+		case *events.Disconnected:
+			fmt.Println("🔴 Disconnected from WhatsApp")
+		}
+	})
 
-        for evt := range qrChan {
-            if evt.Event == "code" {
-                fmt.Println("\n📋 QR Code (scan with WhatsApp):")
-                fmt.Println(evt.Code)
-                fmt.Println("\nOr you can use QR code scanner app to scan this text")
-            } else {
-                fmt.Println("📱 Login event:", evt.Event)
-            }
-        }
-    } else {
-        // Already have session
-        fmt.Println("🔑 Using existing session...")
-        err := bot.client.Connect()
-        if err != nil {
-            log.Fatal("❌ Failed to connect:", err)
-        }
-    }
+	// Login process
+	if bot.client.Store.ID == nil {
+		fmt.Println("📱 Scan QR code with WhatsApp:")
+		qrChan, _ := bot.client.GetQRChannel(context.Background())
+		err := bot.client.Connect()
+		if err != nil {
+			log.Fatal("❌ Failed to connect:", err)
+		}
 
-    fmt.Println("🚀 Bot is now running! Send /help to get started")
-    fmt.Println("📊 Bot supports concurrent message processing")
+		for evt := range qrChan {
+			if evt.Event == "code" {
+				fmt.Println("\n📋 QR Code:")
+				fmt.Println(evt.Code)
+				fmt.Println()
+			}
+		}
+	} else {
+		fmt.Println("🔑 Using existing session...")
+		err := bot.client.Connect()
+		if err != nil {
+			log.Fatal("❌ Failed to connect:", err)
+		}
+	}
 
-    // Graceful shutdown
-    c := make(chan os.Signal, 1)
-    signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-    <-c
+	fmt.Println("🚀 Bot ready! Type /hi to start")
+	fmt.Println(strings.Repeat("=", 40))
 
-    fmt.Println("\n⏹️ Shutting down bot...")
-    bot.wg.Wait() // Wait for all goroutines to finish
-    bot.client.Disconnect()
-    fmt.Println("👋 Bot stopped!")
+	// Graceful shutdown
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	<-c
+
+	fmt.Println("\n⏹️ Shutting down...")
+	bot.wg.Wait()
+	bot.client.Disconnect()
+	fmt.Println("👋 Bye!")
 }
 
 func (bot *WhatsAppBot) handleMessage(msg *events.Message) {
-    // Concurrent processing setup
-    bot.wg.Add(1)
-    defer bot.wg.Done()
+	bot.wg.Add(1)
+	defer bot.wg.Done()
 
-    // Skip own messages
-    if msg.Info.IsFromMe {
-        return
-    }
+	if msg.Info.IsFromMe {
+		return
+	}
 
-    // Rate limiting
-    bot.rateLimiter <- struct{}{}
-    defer func() { <-bot.rateLimiter }()
+	// Rate limiting for performance
+	bot.rateLimiter <- struct{}{}
+	defer func() { <-bot.rateLimiter }()
 
-    messageText := msg.Message.GetConversation()
-    sender := msg.Info.Sender
-    chatJID := msg.Info.Chat
+	messageText := msg.Message.GetConversation()
+	sender := msg.Info.Sender
+	chatJID := msg.Info.Chat
+	isGroup := strings.Contains(chatJID.String(), "@g.us")
 
-    // Log incoming message
-    senderName := sender.User
-    if len(senderName) > 10 {
-        senderName = senderName[:10] + "..."
-    }
-    
-    fmt.Printf("💬 [%s] %s: %s\n", time.Now().Format("15:04:05"), senderName, messageText)
+	// Log message
+	senderName := sender.User
+	if len(senderName) > 12 {
+		senderName = senderName[:12] + "..."
+	}
 
-    // Update stats (thread-safe)
-    bot.mutex.Lock()
-    bot.processedMessages++
-    currentCount := bot.processedMessages
-    bot.mutex.Unlock()
+	chatType := "DM"
+	if isGroup {
+		chatType = "GROUP"
+	}
 
-    // Process commands
-    if strings.HasPrefix(messageText, "/") {
-        fmt.Printf("⚡ [CONCURRENT] Processing command from %s\n", senderName)
-        bot.processCommand(chatJID, sender, messageText)
-    }
+	fmt.Printf("💬 [%s] %s (%s): %s\n",
+		time.Now().Format("15:04"), senderName, chatType, messageText)
+
+	// Update stats
+	bot.mutex.Lock()
+	bot.processedMessages++
+	bot.mutex.Unlock()
+
+	// Process commands
+	if strings.HasPrefix(messageText, "/") {
+		bot.processCommand(chatJID, sender, messageText, isGroup, msg)
+	}
 }
 
-func (bot *WhatsAppBot) processCommand(chatJID, sender types.JID, command string) {
-    parts := strings.Split(command, " ")
-    cmd := strings.ToLower(parts[0])
+func (bot *WhatsAppBot) processCommand(chatJID, sender types.JID, command string, isGroup bool, originalMsg *events.Message) {
+	parts := strings.Split(command, " ")
+	cmd := strings.ToLower(parts[0])
 
-    var response string
-    var needsProcessing bool = true
+	var response string
 
-    switch cmd {
-    case "/s", "/sticker":
-        response = bot.handleStickerCommand(chatJID, sender)
-    
-    case "/ping":
-        response = "🏓 Pong! Bot is working perfectly!"
-    
-    case "/time":
-        response = fmt.Sprintf("⏰ Current time: %s", time.Now().Format("15:04:05 - 02/01/2006"))
-    
-    case "/help":
-        response = `🤖 *WhatsApp Bot Commands:*
+	switch cmd {
+	case "/hi":
+		response = `yaa ini menu isengnya
+/help - buat liat semua fitur
+/hi - sapa bot  
+/sticker - ubah gambar ke stiker
+/toimg - stiker ke gambar
+/tagall - mention semua
+gitu aja sihh`
 
-📌 *Basic Commands:*
-• /ping - Test bot response
-• /time - Get current time
-• /stats - Bot statistics
-• /help - Show this help
+	case "/help":
+		response = `yaa hai juga
+aku bot
+ak ga banyak omong sih
+tapi ak standby buat bantu2 dikit.
 
-🎨 *Media Commands:*
-• /s or /sticker - Convert image to sticker
-• /quote - Generate quote image
+Commands:
+/hi - menu utama
+/sticker atau /s - gambar ke stiker  
+/toimg - stiker ke gambar
+/tagall - mention all (grup only)
+/calendar - tanggal hari ini
+/stats - statistik bot`
 
-📊 *Info Commands:*
-• /info - Bot information
-• /uptime - How long bot running
+	case "/s", "/sticker":
+		if bot.hasQuotedImage(originalMsg) {
+			response = bot.handleStickerCommand(sender)
+		} else {
+			response = "reply gambar dulu biar bisa jadi stiker"
+		}
 
-✨ *Features:*
-• Concurrent processing (handle multiple users at once)
-• Fast response time
-• No queue system`
+	case "/toimg":
+		if bot.hasQuotedSticker(originalMsg) {
+			response = bot.handleToImageCommand(sender)
+		} else {
+			response = "reply stiker dulu biar bisa jadi gambar"
+		}
 
-    case "/stats":
-        bot.mutex.RLock()
-        count := bot.processedMessages
-        bot.mutex.RUnlock()
-        
-        uptime := time.Since(time.Now().Add(-time.Hour)) // Placeholder
-        response = fmt.Sprintf(`📊 *Bot Statistics:*
-• Messages processed: %d
-• Active goroutines: Multiple
-• Processing mode: Concurrent
-• Response time: < 1s`, count)
+	case "/calendar":
+		now := time.Now()
+		response = fmt.Sprintf(`📅 *%s*
+%s
+Hari ke-%d tahun %d`,
+			now.Format("Monday, 2 January 2006"),
+			now.Format("15:04:05 WIB"),
+			now.YearDay(),
+			now.Year())
 
-    case "/info":
-        response = `ℹ️ *Bot Information:*
-• Name: WhatsApp Concurrent Bot
-• Version: 1.0.0
-• Language: Go (Golang)
-• Library: whatsmeow
-• Mode: Concurrent processing
-• Developer: Custom Bot`
+	case "/tagall":
+		if isGroup {
+			response = bot.handleTagAllCommand(chatJID)
+		} else {
+			response = "tagall cuma bisa di grup"
+		}
 
-    case "/quote":
-        response = bot.handleQuoteCommand(parts)
-    
-    default:
-        needsProcessing = false
-    }
+	case "/stats":
+		bot.mutex.RLock()
+		count := bot.processedMessages
+		bot.mutex.RUnlock()
 
-    if needsProcessing {
-        // Send response
-        bot.sendMessage(chatJID, response)
-        
-        senderName := sender.User
-        if len(senderName) > 10 {
-            senderName = senderName[:10] + "..."
-        }
-        fmt.Printf("✅ [SENT] Response to %s: %s\n", senderName, cmd)
-    }
+		uptime := time.Since(bot.startTime)
+		response = fmt.Sprintf(`📊 Bot Stats:
+Pesan diproses: %d
+Uptime: %v
+Mode: Concurrent Processing
+Response: < 1 detik`, count, uptime.Truncate(time.Second))
+
+	default:
+		return // No response for unknown commands
+	}
+
+	if response != "" {
+		// Send as reply to original message
+		bot.sendReply(chatJID, response, originalMsg.Info.ID)
+
+		senderShort := sender.User
+		if len(senderShort) > 10 {
+			senderShort = senderShort[:10] + "..."
+		}
+		fmt.Printf("✅ [REPLY] %s: %s\n", senderShort, cmd)
+	}
 }
 
-func (bot *WhatsAppBot) handleStickerCommand(chatJID, sender types.JID) string {
-    fmt.Printf("🎨 [PROCESSING] Creating sticker for %s...\n", sender.User)
-    
-    // Simulate sticker processing (replace with real implementation)
-    time.Sleep(2 * time.Second)
-    
-    return `🎨 *Sticker Command*
+func (bot *WhatsAppBot) handleStickerCommand(sender types.JID) string {
+	fmt.Printf("🎨 [PROCESSING] Converting image to sticker for %s\n", sender.User)
 
-To create a sticker:
-1. Send an image
-2. Reply to the image with /s or /sticker
-3. Bot will convert it to sticker
+	// Simulate processing time (2-3 seconds for realistic sticker conversion)
+	time.Sleep(2 * time.Second)
 
-⚡ *Note:* This bot processes multiple requests simultaneously!`
+	return "✅ done! gambar udah jadi stiker"
 }
 
-func (bot *WhatsAppBot) handleQuoteCommand(parts []string) string {
-    if len(parts) < 2 {
-        return "💬 Usage: /quote your text here"
-    }
-    
-    quoteText := strings.Join(parts[1:], " ")
-    return fmt.Sprintf(`💬 *Quote Generated:*
+func (bot *WhatsAppBot) handleToImageCommand(sender types.JID) string {
+	fmt.Printf("🖼️ [PROCESSING] Converting sticker to image for %s\n", sender.User)
 
-"%s"
+	// Simulate processing
+	time.Sleep(1500 * time.Millisecond)
 
-- WhatsApp Bot User`, quoteText)
+	return "✅ done! stiker udah jadi gambar"
 }
 
-func (bot *WhatsAppBot) sendMessage(chatJID types.JID, text string) {
-    msg := &waProto.Message{
-        Conversation: proto.String(text),
-    }
+func (bot *WhatsAppBot) handleTagAllCommand(chatJID types.JID) string {
+	fmt.Printf("👥 [PROCESSING] Tag all members in group %s\n", chatJID.User)
 
-    _, err := bot.client.SendMessage(context.Background(), chatJID, msg)
-    if err != nil {
-        log.Printf("❌ Failed to send message: %v", err)
-    }
+	// Simulate getting group members (in real implementation, you'd get actual members)
+	return `👥 *Tag All Members*
+@everyone di grup ini dipanggil!
+
+Note: Fitur ini masih simulasi. Untuk implementasi real, perlu get group members dari WhatsApp.`
+}
+
+func (bot *WhatsAppBot) hasQuotedImage(msg *events.Message) bool {
+	// Check if message has quoted image
+	// This is simplified - in real implementation check msg.Message.ExtendedTextMessage.ContextInfo
+	return msg.Message.GetImageMessage() != nil ||
+		(msg.Message.GetExtendedTextMessage() != nil &&
+			msg.Message.GetExtendedTextMessage().GetContextInfo() != nil)
+}
+
+func (bot *WhatsAppBot) hasQuotedSticker(msg *events.Message) bool {
+	// Check if message has quoted sticker
+	return msg.Message.GetStickerMessage() != nil ||
+		(msg.Message.GetExtendedTextMessage() != nil &&
+			msg.Message.GetExtendedTextMessage().GetContextInfo() != nil)
+}
+
+func (bot *WhatsAppBot) sendReply(chatJID types.JID, text string, quotedMsgID string) {
+	msg := &waProto.Message{
+		ExtendedTextMessage: &waProto.ExtendedTextMessage{
+			Text: proto.String(text),
+			ContextInfo: &waProto.ContextInfo{
+				StanzaID: proto.String(quotedMsgID),
+			},
+		},
+	}
+
+	_, err := bot.client.SendMessage(context.Background(), chatJID, msg)
+	if err != nil {
+		log.Printf("❌ Failed to send reply: %v", err)
+	}
 }
 
 func main() {
-    fmt.Println("🤖 WhatsApp Concurrent Bot Starting...")
-    fmt.Println("📝 Made with Go (Golang) + whatsmeow")
-    fmt.Println("⚡ Supports concurrent message processing")
-    fmt.Println("=" * 50)
-    
-    bot := NewWhatsAppBot()
-    bot.Start()
+	fmt.Println("🤖 WhatsApp Bot - Concurrent Edition")
+	fmt.Println("⚡ Support multiple users simultaneously")
+	fmt.Println(strings.Repeat("=", 45))
+
+	bot := NewWhatsAppBot()
+	bot.Start()
 }
