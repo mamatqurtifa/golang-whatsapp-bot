@@ -62,14 +62,24 @@ func (bot *WhatsAppBot) Start() {
 		case *events.Message:
 			go bot.handleMessage(v)
 		case *events.Connected:
-			fmt.Println("Connected to WhatsApp")
+			// Get phone number info
+			phoneNumber := "Unknown"
+			if bot.client.Store.ID != nil {
+				phoneNumber = "+" + bot.client.Store.ID.User
+			}
+			fmt.Printf("Connected to WhatsApp | Number: %s\n", phoneNumber)
 		case *events.Disconnected:
 			fmt.Println("Disconnected from WhatsApp")
+		case *events.LoggedOut:
+			fmt.Println("Logged out from WhatsApp - Session expired")
 		}
 	})
 
 	if bot.client.Store.ID == nil {
-		fmt.Println("Scan QR code:")
+		fmt.Println("No existing session found")
+		fmt.Println("Scan QR code with WhatsApp:")
+		fmt.Println("================================")
+
 		qrChan, _ := bot.client.GetQRChannel(context.Background())
 		err := bot.client.Connect()
 		if err != nil {
@@ -81,10 +91,19 @@ func (bot *WhatsAppBot) Start() {
 				// Print QR code to terminal using ASCII
 				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
 				fmt.Println()
+				fmt.Println("Scan this QR code with WhatsApp > Linked Devices > Link a Device")
+			} else if evt.Event == "success" {
+				fmt.Println("QR Code login successful")
+				break
+			} else {
+				fmt.Printf("QR Channel event: %s\n", evt.Event)
 			}
 		}
 	} else {
-		fmt.Println("Using existing session...")
+		phoneNumber := "+" + bot.client.Store.ID.User
+		fmt.Printf("Existing session found for: %s\n", phoneNumber)
+		fmt.Println("Connecting...")
+
 		err := bot.client.Connect()
 		if err != nil {
 			log.Fatal("Failed to connect:", err)
@@ -92,6 +111,13 @@ func (bot *WhatsAppBot) Start() {
 	}
 
 	fmt.Println("Bot ready")
+
+	// Show current session info
+	if bot.client.Store.ID != nil {
+		phoneNumber := "+" + bot.client.Store.ID.User
+		fmt.Printf("Logged in as: %s\n", phoneNumber)
+	}
+
 	fmt.Println("========================================")
 
 	c := make(chan os.Signal, 1)
