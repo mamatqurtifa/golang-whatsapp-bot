@@ -138,7 +138,8 @@ func (bot *WhatsAppBot) handleMessage(msg *events.Message) {
 	bot.rateLimiter <- struct{}{}
 	defer func() { <-bot.rateLimiter }()
 
-	messageText := msg.Message.GetConversation()
+	// Extract message text from different message types
+	messageText := bot.extractMessageText(msg)
 	sender := msg.Info.Sender
 	chatJID := msg.Info.Chat
 	isGroup := strings.Contains(chatJID.String(), "@g.us")
@@ -162,11 +163,11 @@ func (bot *WhatsAppBot) handleMessage(msg *events.Message) {
 		chatInfo = fmt.Sprintf(" (%s)", groupName)
 	}
 
-	// Enhanced message logging
+	// Enhanced message logging with proper timestamp
 	timestamp := time.Now().Format("15:04:05")
 	fmt.Printf("\n📨 [%s] %s%s\n", timestamp, chatType, chatInfo)
 	fmt.Printf("👤 From: +%s\n", sender.User)
-	fmt.Printf("💬 Message: %s\n", messageText)
+	fmt.Printf("💬 Message: '%s'\n", messageText)
 
 	bot.mutex.Lock()
 	bot.processedMessages++
@@ -175,19 +176,63 @@ func (bot *WhatsAppBot) handleMessage(msg *events.Message) {
 
 	fmt.Printf("📊 Total processed: %d\n", currentCount)
 
-	if strings.HasPrefix(messageText, "/") {
+	// Check if it's a command (even if messageText is empty, log it)
+	if messageText != "" && strings.HasPrefix(messageText, "/") {
 		fmt.Printf("⚡ Processing command: %s\n", strings.Split(messageText, " ")[0])
 		bot.processCommand(chatJID, sender, messageText, isGroup, msg)
+	} else if messageText == "" {
+		fmt.Printf("⚠️ Empty message received - might be media/unsupported type\n")
+	} else {
+		fmt.Printf("💭 Regular message (not a command)\n")
 	}
 
 	fmt.Println("----------------------------------------")
 }
 
+// extractMessageText - Extract text from different message types
+func (bot *WhatsAppBot) extractMessageText(msg *events.Message) string {
+	// Try different message types
+	if msg.Message.GetConversation() != "" {
+		return msg.Message.GetConversation()
+	}
+
+	if extendedMsg := msg.Message.GetExtendedTextMessage(); extendedMsg != nil {
+		return extendedMsg.GetText()
+	}
+
+	if imageMsg := msg.Message.GetImageMessage(); imageMsg != nil {
+		return imageMsg.GetCaption()
+	}
+
+	if videoMsg := msg.Message.GetVideoMessage(); videoMsg != nil {
+		return videoMsg.GetCaption()
+	}
+
+	if stickerMsg := msg.Message.GetStickerMessage(); stickerMsg != nil {
+		return "[Sticker]"
+	}
+
+	if audioMsg := msg.Message.GetAudioMessage(); audioMsg != nil {
+		return "[Audio]"
+	}
+
+	if documentMsg := msg.Message.GetDocumentMessage(); documentMsg != nil {
+		return fmt.Sprintf("[Document: %s]", documentMsg.GetFileName())
+	}
+
+	return ""
+}
+
 func (bot *WhatsAppBot) processCommand(chatJID, sender types.JID, command string, isGroup bool, originalMsg *events.Message) {
-	parts := strings.Split(command, " ")
+	parts := strings.Split(strings.TrimSpace(command), " ")
+	if len(parts) == 0 {
+		return
+	}
+
 	cmd := strings.ToLower(parts[0])
 	var response string
 
+	fmt.Printf("🔍 Command detected: '%s'\n", cmd)
 	startTime := time.Now()
 
 	switch cmd {
@@ -204,6 +249,7 @@ Commands:
 /stats - Statistik bot
 
 Bot siap melayani! 🤖`
+		fmt.Printf("✅ Responding to /hi command\n")
 
 	case "/help":
 		response = `🤖 WhatsApp Bot Helper
@@ -221,20 +267,23 @@ Aku bot sederhana yang bisa bantu beberapa hal:
 ⚡ Response time: < 500ms
 🔄 Concurrent processing: Ya
 💪 24/7 Ready!`
+		fmt.Printf("✅ Responding to /help command\n")
 
 	case "/s", "/sticker":
 		if bot.hasQuotedImage(originalMsg) {
-			response = bot.StickerHandler(sender) // Fixed: was handleStickerCommand
+			response = bot.StickerHandler(sender)
 		} else {
 			response = "❌ Reply gambar atau gif dulu untuk dijadikan stiker"
 		}
+		fmt.Printf("✅ Responding to sticker command\n")
 
 	case "/toimg":
 		if bot.hasQuotedSticker(originalMsg) {
-			response = bot.ToImageHandler(sender) // Fixed: was handleToImageCommand
+			response = bot.ToImageHandler(sender)
 		} else {
 			response = "❌ Reply stiker dulu untuk dikonversi ke gambar"
 		}
+		fmt.Printf("✅ Responding to toimg command\n")
 
 	case "/calendar":
 		now := time.Now()
@@ -249,13 +298,15 @@ Semoga harimu menyenangkan! 😊`,
 			now.YearDay(),
 			now.Year(),
 			getWeekOfYear(now))
+		fmt.Printf("✅ Responding to calendar command\n")
 
 	case "/tagall":
 		if isGroup {
-			response = bot.TagAllHandler(chatJID) // Fixed: was handleTagAllCommand
+			response = bot.TagAllHandler(chatJID)
 		} else {
 			response = "❌ Command /tagall hanya bisa digunakan di grup"
 		}
+		fmt.Printf("✅ Responding to tagall command\n")
 
 	case "/stats":
 		bot.mutex.RLock()
@@ -283,12 +334,16 @@ Keep chatting! 🤖✨`,
 			count,
 			uptime.Truncate(time.Second),
 			msgPerMin)
+		fmt.Printf("✅ Responding to stats command\n")
 
 	default:
+		fmt.Printf("❓ Unknown command: %s\n", cmd)
 		return // No response for unknown commands
 	}
 
 	if response != "" {
+		fmt.Printf("📝 Preparing response (%d chars)\n", len(response))
+
 		// Send reply immediately
 		go func() {
 			bot.sendReply(chatJID, response, originalMsg.Info.ID)
@@ -300,6 +355,8 @@ Keep chatting! 🤖✨`,
 			}
 			fmt.Printf("✅ REPLIED to %s: %s (took %v)\n", senderShort, cmd, processingTime)
 		}()
+	} else {
+		fmt.Printf("❌ No response generated\n")
 	}
 }
 
@@ -363,6 +420,8 @@ func (bot *WhatsAppBot) hasQuotedSticker(msg *events.Message) bool {
 }
 
 func (bot *WhatsAppBot) sendReply(chatJID types.JID, text string, quotedMsgID string) {
+	fmt.Printf("📤 Sending reply: %s\n", text[:min(50, len(text))]+"...")
+
 	msg := &waProto.Message{
 		ExtendedTextMessage: &waProto.ExtendedTextMessage{
 			Text: proto.String(text),
@@ -375,7 +434,17 @@ func (bot *WhatsAppBot) sendReply(chatJID types.JID, text string, quotedMsgID st
 	_, err := bot.client.SendMessage(context.Background(), chatJID, msg)
 	if err != nil {
 		log.Printf("❌ Failed to send reply: %v", err)
+	} else {
+		fmt.Printf("✅ Reply sent successfully\n")
 	}
+}
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func main() {
