@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
@@ -21,6 +20,7 @@ import (
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"google.golang.org/protobuf/proto"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type WhatsAppBot struct {
@@ -38,15 +38,15 @@ func NewWhatsAppBot() *WhatsAppBot {
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-
+	
 	deviceStore, err := container.GetFirstDevice(context.Background())
 	if err != nil {
 		log.Fatal("Failed to get device:", err)
 	}
-
+	
 	clientLog := waLog.Stdout("Client", "ERROR", false)
 	client := whatsmeow.NewClient(deviceStore, clientLog)
-
+	
 	return &WhatsAppBot{
 		client:      client,
 		rateLimiter: make(chan struct{}, 20),
@@ -56,13 +56,12 @@ func NewWhatsAppBot() *WhatsAppBot {
 
 func (bot *WhatsAppBot) Start() {
 	fmt.Println("Starting WhatsApp Bot...")
-
+	
 	bot.client.AddEventHandler(func(evt interface{}) {
 		switch v := evt.(type) {
 		case *events.Message:
 			go bot.handleMessage(v)
 		case *events.Connected:
-			// Get phone number info
 			phoneNumber := "Unknown"
 			if bot.client.Store.ID != nil {
 				phoneNumber = "+" + bot.client.Store.ID.User
@@ -79,16 +78,15 @@ func (bot *WhatsAppBot) Start() {
 		fmt.Println("No existing session found")
 		fmt.Println("Scan QR code with WhatsApp:")
 		fmt.Println("================================")
-
+		
 		qrChan, _ := bot.client.GetQRChannel(context.Background())
 		err := bot.client.Connect()
 		if err != nil {
 			log.Fatal("Failed to connect:", err)
 		}
-
+		
 		for evt := range qrChan {
 			if evt.Event == "code" {
-				// Print QR code to terminal using ASCII
 				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
 				fmt.Println()
 				fmt.Println("Scan this QR code with WhatsApp > Linked Devices > Link a Device")
@@ -103,7 +101,7 @@ func (bot *WhatsAppBot) Start() {
 		phoneNumber := "+" + bot.client.Store.ID.User
 		fmt.Printf("Existing session found for: %s\n", phoneNumber)
 		fmt.Println("Connecting...")
-
+		
 		err := bot.client.Connect()
 		if err != nil {
 			log.Fatal("Failed to connect:", err)
@@ -111,13 +109,12 @@ func (bot *WhatsAppBot) Start() {
 	}
 
 	fmt.Println("Bot ready")
-
-	// Show current session info
+	
 	if bot.client.Store.ID != nil {
 		phoneNumber := "+" + bot.client.Store.ID.User
 		fmt.Printf("Logged in as: %s\n", phoneNumber)
 	}
-
+	
 	fmt.Println("========================================")
 
 	c := make(chan os.Signal, 1)
@@ -255,27 +252,14 @@ Response: < 1 detik`, count, uptime.Truncate(time.Second))
 
 func (bot *WhatsAppBot) handleStickerCommand(sender types.JID) string {
 	fmt.Printf("PROCESSING Converting image/gif to sticker for %s\n", sender.User)
-
-	// Real implementation would:
-	// 1. Download image/gif from WhatsApp
-	// 2. If GIF: extract first frame or convert to animated WebP
-	// 3. Convert to WebP format
-	// 4. Resize to 512x512 with proper aspect ratio (add padding if needed)
-	// 5. Upload as sticker
-
+	
 	time.Sleep(2 * time.Second)
 	return "done gambar udah jadi stiker"
 }
 
 func (bot *WhatsAppBot) handleToImageCommand(sender types.JID) string {
 	fmt.Printf("PROCESSING Converting sticker to image for %s\n", sender.User)
-
-	// Real implementation would:
-	// 1. Download sticker from WhatsApp (WebP format)
-	// 2. Convert WebP to PNG/JPEG
-	// 3. Preserve original aspect ratio (no white padding)
-	// 4. Send as image message
-
+	
 	time.Sleep(1500 * time.Millisecond)
 	return "done stiker udah jadi gambar"
 }
@@ -288,38 +272,79 @@ Note: Fitur ini masih simulasi`
 }
 
 func (bot *WhatsAppBot) hasQuotedImage(msg *events.Message) bool {
-	// Check direct image/gif
-	if msg.Message.GetImageMessage() != nil || msg.Message.GetVideoMessage() != nil {
+	// Debug: Print message structure
+	fmt.Printf("DEBUG: Checking message type...\n")
+	
+	// Check direct image
+	if msg.Message.GetImageMessage() != nil {
+		fmt.Printf("DEBUG: Found direct image\n")
 		return true
 	}
-
-	// Check quoted/replied image/gif
-	if msg.Message.GetExtendedTextMessage() != nil {
-		contextInfo := msg.Message.GetExtendedTextMessage().GetContextInfo()
-		if contextInfo != nil && contextInfo.QuotedMessage != nil {
-			quoted := contextInfo.QuotedMessage
-			return quoted.GetImageMessage() != nil || quoted.GetVideoMessage() != nil
+	
+	// Check direct video/gif
+	if msg.Message.GetVideoMessage() != nil {
+		fmt.Printf("DEBUG: Found direct video/gif\n")
+		return true
+	}
+	
+	// Check extended text message (replies)
+	extendedMsg := msg.Message.GetExtendedTextMessage()
+	if extendedMsg != nil {
+		fmt.Printf("DEBUG: Found extended text message\n")
+		contextInfo := extendedMsg.GetContextInfo()
+		if contextInfo != nil {
+			fmt.Printf("DEBUG: Found context info\n")
+			quotedMsg := contextInfo.GetQuotedMessage()
+			if quotedMsg != nil {
+				fmt.Printf("DEBUG: Found quoted message\n")
+				// Check quoted image
+				if quotedMsg.GetImageMessage() != nil {
+					fmt.Printf("DEBUG: Found quoted image\n")
+					return true
+				}
+				// Check quoted video/gif
+				if quotedMsg.GetVideoMessage() != nil {
+					fmt.Printf("DEBUG: Found quoted video/gif\n")
+					return true
+				}
+			}
 		}
 	}
-
+	
+	fmt.Printf("DEBUG: No image/gif found\n")
 	return false
 }
 
 func (bot *WhatsAppBot) hasQuotedSticker(msg *events.Message) bool {
+	// Debug: Print message structure
+	fmt.Printf("DEBUG: Checking sticker message type...\n")
+	
 	// Check direct sticker
 	if msg.Message.GetStickerMessage() != nil {
+		fmt.Printf("DEBUG: Found direct sticker\n")
 		return true
 	}
-
-	// Check quoted/replied sticker
-	if msg.Message.GetExtendedTextMessage() != nil {
-		contextInfo := msg.Message.GetExtendedTextMessage().GetContextInfo()
-		if contextInfo != nil && contextInfo.QuotedMessage != nil {
-			quoted := contextInfo.QuotedMessage
-			return quoted.GetStickerMessage() != nil
+	
+	// Check extended text message (replies)
+	extendedMsg := msg.Message.GetExtendedTextMessage()
+	if extendedMsg != nil {
+		fmt.Printf("DEBUG: Found extended text message for sticker\n")
+		contextInfo := extendedMsg.GetContextInfo()
+		if contextInfo != nil {
+			fmt.Printf("DEBUG: Found context info for sticker\n")
+			quotedMsg := contextInfo.GetQuotedMessage()
+			if quotedMsg != nil {
+				fmt.Printf("DEBUG: Found quoted message for sticker\n")
+				// Check quoted sticker
+				if quotedMsg.GetStickerMessage() != nil {
+					fmt.Printf("DEBUG: Found quoted sticker\n")
+					return true
+				}
+			}
 		}
 	}
-
+	
+	fmt.Printf("DEBUG: No sticker found\n")
 	return false
 }
 
@@ -343,7 +368,7 @@ func main() {
 	fmt.Println("WhatsApp Bot - Concurrent Edition")
 	fmt.Println("Support multiple users simultaneously")
 	fmt.Println("=============================================")
-
+	
 	bot := NewWhatsAppBot()
 	bot.Start()
 }
