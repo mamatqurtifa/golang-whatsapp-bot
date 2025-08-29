@@ -175,7 +175,7 @@ Commands:
 		if bot.hasQuotedImage(originalMsg) {
 			response = bot.handleStickerCommand(sender)
 		} else {
-			response = "reply gambar dulu"
+			response = "reply gambar atau gif dulu"
 		}
 
 	case "/toimg":
@@ -228,13 +228,28 @@ Response: < 1 detik`, count, uptime.Truncate(time.Second))
 }
 
 func (bot *WhatsAppBot) handleStickerCommand(sender types.JID) string {
-	fmt.Printf("PROCESSING Converting image to sticker for %s\n", sender.User)
+	fmt.Printf("PROCESSING Converting image/gif to sticker for %s\n", sender.User)
+
+	// Real implementation would:
+	// 1. Download image/gif from WhatsApp
+	// 2. If GIF: extract first frame or convert to animated WebP
+	// 3. Convert to WebP format
+	// 4. Resize to 512x512 with proper aspect ratio (add padding if needed)
+	// 5. Upload as sticker
+
 	time.Sleep(2 * time.Second)
 	return "done gambar udah jadi stiker"
 }
 
 func (bot *WhatsAppBot) handleToImageCommand(sender types.JID) string {
 	fmt.Printf("PROCESSING Converting sticker to image for %s\n", sender.User)
+
+	// Real implementation would:
+	// 1. Download sticker from WhatsApp (WebP format)
+	// 2. Convert WebP to PNG/JPEG
+	// 3. Preserve original aspect ratio (no white padding)
+	// 4. Send as image message
+
 	time.Sleep(1500 * time.Millisecond)
 	return "done stiker udah jadi gambar"
 }
@@ -247,15 +262,39 @@ Note: Fitur ini masih simulasi`
 }
 
 func (bot *WhatsAppBot) hasQuotedImage(msg *events.Message) bool {
-	return msg.Message.GetImageMessage() != nil ||
-		(msg.Message.GetExtendedTextMessage() != nil &&
-			msg.Message.GetExtendedTextMessage().GetContextInfo() != nil)
+	// Check direct image/gif
+	if msg.Message.GetImageMessage() != nil || msg.Message.GetVideoMessage() != nil {
+		return true
+	}
+
+	// Check quoted/replied image/gif
+	if msg.Message.GetExtendedTextMessage() != nil {
+		contextInfo := msg.Message.GetExtendedTextMessage().GetContextInfo()
+		if contextInfo != nil && contextInfo.QuotedMessage != nil {
+			quoted := contextInfo.QuotedMessage
+			return quoted.GetImageMessage() != nil || quoted.GetVideoMessage() != nil
+		}
+	}
+
+	return false
 }
 
 func (bot *WhatsAppBot) hasQuotedSticker(msg *events.Message) bool {
-	return msg.Message.GetStickerMessage() != nil ||
-		(msg.Message.GetExtendedTextMessage() != nil &&
-			msg.Message.GetExtendedTextMessage().GetContextInfo() != nil)
+	// Check direct sticker
+	if msg.Message.GetStickerMessage() != nil {
+		return true
+	}
+
+	// Check quoted/replied sticker
+	if msg.Message.GetExtendedTextMessage() != nil {
+		contextInfo := msg.Message.GetExtendedTextMessage().GetContextInfo()
+		if contextInfo != nil && contextInfo.QuotedMessage != nil {
+			quoted := contextInfo.QuotedMessage
+			return quoted.GetStickerMessage() != nil
+		}
+	}
+
+	return false
 }
 
 func (bot *WhatsAppBot) sendReply(chatJID types.JID, text string, quotedMsgID string) {

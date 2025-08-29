@@ -13,10 +13,11 @@ func (bot *WhatsAppBot) StickerHandler(sender types.JID) string {
 	fmt.Printf("CONCURRENT Processing sticker for %s\n", sender.User)
 
 	// Real implementation would:
-	// 1. Download image from WhatsApp
-	// 2. Convert to WebP format
-	// 3. Resize to 512x512
-	// 4. Upload as sticker
+	// 1. Download image/gif from WhatsApp
+	// 2. If GIF: extract first frame or convert to animated WebP
+	// 3. Convert to WebP format
+	// 4. Resize to 512x512 with proper aspect ratio (add padding if needed)
+	// 5. Upload as sticker
 
 	processingTime := time.Duration(2000+(len(sender.User)%1000)) * time.Millisecond
 	time.Sleep(processingTime)
@@ -28,7 +29,12 @@ func (bot *WhatsAppBot) StickerHandler(sender types.JID) string {
 func (bot *WhatsAppBot) ToImageHandler(sender types.JID) string {
 	fmt.Printf("CONCURRENT Converting sticker to image for %s\n", sender.User)
 
-	// Simulate sticker to image conversion
+	// Real implementation would:
+	// 1. Download sticker from WhatsApp (WebP format)
+	// 2. Convert WebP to PNG/JPEG
+	// 3. Preserve original aspect ratio (no white padding)
+	// 4. Send as image message
+
 	processingTime := time.Duration(1500+(len(sender.User)%500)) * time.Millisecond
 	time.Sleep(processingTime)
 
