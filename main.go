@@ -271,7 +271,7 @@ Aku bot sederhana yang bisa bantu beberapa hal:
 
 	case "/s", "/sticker":
 		if bot.hasQuotedImage(originalMsg) {
-			response = bot.StickerHandler(sender)
+			response = bot.StickerHandler(sender, originalMsg) // Pass originalMsg
 		} else {
 			response = "❌ Reply gambar atau gif dulu untuk dijadikan stiker"
 		}
@@ -279,7 +279,7 @@ Aku bot sederhana yang bisa bantu beberapa hal:
 
 	case "/toimg":
 		if bot.hasQuotedSticker(originalMsg) {
-			response = bot.ToImageHandler(sender)
+			response = bot.ToImageHandler(sender, originalMsg) // Pass originalMsg
 		} else {
 			response = "❌ Reply stiker dulu untuk dikonversi ke gambar"
 		}
@@ -356,7 +356,7 @@ Keep chatting! 🤖✨`,
 			fmt.Printf("✅ REPLIED to %s: %s (took %v)\n", senderShort, cmd, processingTime)
 		}()
 	} else {
-		fmt.Printf("❌ No response generated\n")
+		fmt.Printf("ℹ️ No text response - media/action already sent\n")
 	}
 }
 
