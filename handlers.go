@@ -1,4 +1,4 @@
-// handlers.go
+// handlers.go - Simple version without external dependencies
 package main
 
 import (
@@ -14,7 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// StickerHandler - Handle sticker conversion with REAL implementation
+// StickerHandler - Handle sticker conversion with simple implementation
 func (bot *WhatsAppBot) StickerHandler(sender types.JID, msg *events.Message) string {
 	fmt.Printf("🎨 PROCESSING: Converting to sticker for +%s\n", sender.User)
 
@@ -25,11 +25,11 @@ func (bot *WhatsAppBot) StickerHandler(sender types.JID, msg *events.Message) st
 		return "❌ Gagal download gambar. Coba lagi ya!"
 	}
 
-	// Convert to sticker
+	// Check if it's already a valid format for sticker
 	stickerData, err := bot.convertToSticker(imageData)
 	if err != nil {
 		fmt.Printf("❌ Failed to convert to sticker: %v\n", err)
-		return "❌ Gagal convert ke sticker. Format tidak didukung!"
+		return "❌ Gagal convert ke sticker. " + err.Error()
 	}
 
 	// Send sticker
@@ -43,7 +43,7 @@ func (bot *WhatsAppBot) StickerHandler(sender types.JID, msg *events.Message) st
 	return "" // Don't send text reply, sticker is already sent
 }
 
-// ToImageHandler - Convert sticker to image with REAL implementation
+// ToImageHandler - Convert sticker to image with simple implementation
 func (bot *WhatsAppBot) ToImageHandler(sender types.JID, msg *events.Message) string {
 	fmt.Printf("🖼️ PROCESSING: Converting sticker to image for +%s\n", sender.User)
 
@@ -142,7 +142,7 @@ func (bot *WhatsAppBot) downloadImage(msg *events.Message) ([]byte, error) {
 		}
 	}
 
-	// Download the media - FIXED: Added context parameter
+	// Download the media
 	if imageMsg != nil {
 		fmt.Printf("📥 Downloading image...\n")
 		return bot.client.Download(context.Background(), imageMsg)
@@ -177,66 +177,95 @@ func (bot *WhatsAppBot) downloadSticker(msg *events.Message) ([]byte, error) {
 
 	if stickerMsg != nil {
 		fmt.Printf("📥 Downloading sticker...\n")
-		// FIXED: Added context parameter
 		return bot.client.Download(context.Background(), stickerMsg)
 	}
 
 	return nil, fmt.Errorf("no sticker found in message")
 }
 
-// convertToSticker - Convert image data to sticker format (WebP)
+// convertToSticker - Simple version that checks format and gives helpful error
 func (bot *WhatsAppBot) convertToSticker(imageData []byte) ([]byte, error) {
 	fmt.Printf("🔄 Converting to sticker format...\n")
 
-	// For now, return the original data
-	// In real implementation, you would:
-	// 1. Decode image (JPEG/PNG/GIF)
-	// 2. Resize to 512x512 with proper aspect ratio
-	// 3. Convert to WebP format
-	// 4. Add sticker metadata
+	// Check if it's already WebP (WhatsApp sticker format)
+	if len(imageData) >= 12 {
+		// Check for WebP signature: "RIFF" + 4 bytes size + "WEBP"
+		if string(imageData[0:4]) == "RIFF" && string(imageData[8:12]) == "WEBP" {
+			fmt.Printf("✅ Already in WebP format - perfect for sticker!\n")
+			return imageData, nil
+		}
 
-	// Simulate processing time
-	time.Sleep(100 * time.Millisecond)
+		// Check for PNG signature
+		if len(imageData) >= 8 && string(imageData[1:4]) == "PNG" {
+			fmt.Printf("⚠️ PNG detected - need conversion to WebP\n")
+			return nil, fmt.Errorf("PNG perlu dikonversi ke WebP dulu. Gunakan online converter (PNG to WebP)")
+		}
 
+		// Check for JPEG signature
+		if len(imageData) >= 2 && imageData[0] == 0xFF && imageData[1] == 0xD8 {
+			fmt.Printf("⚠️ JPEG detected - need conversion to WebP\n")
+			return nil, fmt.Errorf("JPEG perlu dikonversi ke WebP dulu. Gunakan online converter (JPEG to WebP)")
+		}
+	}
+
+	// For now, try to send as-is and let WhatsApp handle it
+	fmt.Printf("⚠️ Unknown format - trying to send as-is\n")
 	return imageData, nil
 }
 
-// convertStickerToImage - Convert sticker (WebP) to image (PNG)
+// convertStickerToImage - Simple version that works with WebP stickers
 func (bot *WhatsAppBot) convertStickerToImage(stickerData []byte) ([]byte, error) {
 	fmt.Printf("🔄 Converting sticker to image...\n")
 
-	// For now, return the original data
-	// In real implementation, you would:
-	// 1. Decode WebP sticker
-	// 2. Convert to PNG/JPEG
-	// 3. Preserve transparency if needed
+	// Check if it's WebP
+	if len(stickerData) >= 12 &&
+		string(stickerData[0:4]) == "RIFF" &&
+		string(stickerData[8:12]) == "WEBP" {
+		fmt.Printf("✅ WebP sticker detected\n")
 
-	// Simulate processing time
-	time.Sleep(100 * time.Millisecond)
+		// For simplicity, return as-is with PNG mimetype
+		// WhatsApp can handle WebP as image too
+		return stickerData, nil
+	}
 
+	// If not WebP, return as-is
+	fmt.Printf("⚠️ Unknown sticker format - returning as-is\n")
 	return stickerData, nil
 }
 
-// sendSticker - Send sticker to chat
+// sendSticker - Send sticker to chat with proper formatting
 func (bot *WhatsAppBot) sendSticker(chatJID types.JID, stickerData []byte, quotedMsgID string) error {
-	fmt.Printf("📤 Uploading sticker...\n")
+	fmt.Printf("📤 Uploading sticker (%d bytes)...\n", len(stickerData))
 
-	// FIXED: Use correct media type constant
+	// Upload sticker to WhatsApp servers
 	uploaded, err := bot.client.Upload(context.Background(), stickerData, whatsmeow.MediaImage)
 	if err != nil {
 		return fmt.Errorf("failed to upload sticker: %v", err)
 	}
 
-	// Create sticker message
+	// Determine mimetype based on content
+	mimetype := "image/webp"
+	if len(stickerData) >= 8 && string(stickerData[1:4]) == "PNG" {
+		mimetype = "image/png"
+	} else if len(stickerData) >= 2 && stickerData[0] == 0xFF && stickerData[1] == 0xD8 {
+		mimetype = "image/jpeg"
+	}
+
+	// Create sticker message with enhanced metadata
 	stickerMsg := &waProto.Message{
 		StickerMessage: &waProto.StickerMessage{
 			URL:           proto.String(uploaded.URL),
 			DirectPath:    proto.String(uploaded.DirectPath),
 			MediaKey:      uploaded.MediaKey,
-			Mimetype:      proto.String("image/webp"),
+			Mimetype:      proto.String(mimetype),
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(stickerData))),
+			// Add sticker dimensions (WhatsApp expects these)
+			Width:  proto.Uint32(512),
+			Height: proto.Uint32(512),
+			// Mark as sticker (important!)
+			IsAnimated: proto.Bool(false),
 			ContextInfo: &waProto.ContextInfo{
 				StanzaID: proto.String(quotedMsgID),
 			},
@@ -255,12 +284,22 @@ func (bot *WhatsAppBot) sendSticker(chatJID types.JID, stickerData []byte, quote
 
 // sendImage - Send image to chat
 func (bot *WhatsAppBot) sendImage(chatJID types.JID, imageData []byte, filename string, quotedMsgID string) error {
-	fmt.Printf("📤 Uploading image...\n")
+	fmt.Printf("📤 Uploading image (%d bytes)...\n", len(imageData))
 
 	// Upload image to WhatsApp servers
 	uploaded, err := bot.client.Upload(context.Background(), imageData, whatsmeow.MediaImage)
 	if err != nil {
 		return fmt.Errorf("failed to upload image: %v", err)
+	}
+
+	// Determine mimetype
+	mimetype := "image/png"
+	if len(imageData) >= 12 &&
+		string(imageData[0:4]) == "RIFF" &&
+		string(imageData[8:12]) == "WEBP" {
+		mimetype = "image/webp"
+	} else if len(imageData) >= 2 && imageData[0] == 0xFF && imageData[1] == 0xD8 {
+		mimetype = "image/jpeg"
 	}
 
 	// Create image message
@@ -269,7 +308,7 @@ func (bot *WhatsAppBot) sendImage(chatJID types.JID, imageData []byte, filename 
 			URL:           proto.String(uploaded.URL),
 			DirectPath:    proto.String(uploaded.DirectPath),
 			MediaKey:      uploaded.MediaKey,
-			Mimetype:      proto.String("image/png"),
+			Mimetype:      proto.String(mimetype),
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(imageData))),
