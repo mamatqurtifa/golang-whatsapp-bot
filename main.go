@@ -1,4 +1,4 @@
-// main.go
+// main.go - Updated version with WebP tools support
 package main
 
 import (
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"sync"
@@ -55,7 +56,11 @@ func NewWhatsAppBot() *WhatsAppBot {
 }
 
 func (bot *WhatsAppBot) Start() {
-	fmt.Println("Starting WhatsApp Bot...")
+	fmt.Println("🤖 WhatsApp Bot - WebP Enhanced Edition")
+	fmt.Println("========================================")
+
+	// Check WebP tools availability
+	bot.checkWebPToolsAvailability()
 
 	bot.client.AddEventHandler(func(evt interface{}) {
 		switch v := evt.(type) {
@@ -176,7 +181,7 @@ func (bot *WhatsAppBot) handleMessage(msg *events.Message) {
 
 	fmt.Printf("📊 Total processed: %d\n", currentCount)
 
-	// Check if it's a command (even if messageText is empty, log it)
+	// Check if it's a command
 	if messageText != "" && strings.HasPrefix(messageText, "/") {
 		fmt.Printf("⚡ Processing command: %s\n", strings.Split(messageText, " ")[0])
 		bot.processCommand(chatJID, sender, messageText, isGroup, msg)
@@ -242,44 +247,56 @@ func (bot *WhatsAppBot) processCommand(chatJID, sender types.JID, command string
 Commands:
 /help - Bantuan lengkap
 /hi - Sapa bot  
-/sticker atau /s - Gambar ke stiker
+/sticker atau /s - Gambar ke stiker (WebP)
 /toimg - Stiker ke gambar
 /tagall - Mention semua (grup only)
 /calendar - Tanggal hari ini
 /stats - Statistik bot
+/tools - Cek WebP tools
 
-Bot siap melayani! 🤖`
+Bot siap melayani! 🤖✨`
 		fmt.Printf("✅ Responding to /hi command\n")
 
 	case "/help":
-		response = `🤖 WhatsApp Bot Helper
+		response = `🤖 WhatsApp Bot Helper - WebP Edition
 
-Aku bot sederhana yang bisa bantu beberapa hal:
+Aku bot yang bisa bantu convert sticker dengan WebP!
 
 📋 Commands:
 • /hi - Menu utama
-• /sticker atau /s - Konversi gambar/gif ke stiker  
-• /toimg - Konversi stiker ke gambar
+• /sticker atau /s - Konversi gambar/gif ke stiker WebP 
+• /toimg - Konversi stiker ke gambar PNG
 • /tagall - Mention semua member (grup only)
 • /calendar - Info tanggal hari ini
 • /stats - Statistik bot
+• /tools - Cek status WebP tools
+
+🎯 Features:
+• WebP sticker support (cwebp/dwebp)
+• Auto-resize ke 512x512
+• Fallback ke PNG jika WebP gagal
+• Support JPEG, PNG, WebP input
 
 ⚡ Response time: < 500ms
 🔄 Concurrent processing: Ya
 💪 24/7 Ready!`
 		fmt.Printf("✅ Responding to /help command\n")
 
+	case "/tools":
+		response = bot.getToolsStatus()
+		fmt.Printf("✅ Responding to /tools command\n")
+
 	case "/s", "/sticker":
 		if bot.hasQuotedImage(originalMsg) {
-			response = bot.StickerHandler(sender, originalMsg) // Pass originalMsg
+			response = bot.StickerHandler(sender, originalMsg)
 		} else {
-			response = "❌ Reply gambar atau gif dulu untuk dijadikan stiker"
+			response = "❌ Reply gambar atau gif dulu untuk dijadikan stiker WebP"
 		}
 		fmt.Printf("✅ Responding to sticker command\n")
 
 	case "/toimg":
 		if bot.hasQuotedSticker(originalMsg) {
-			response = bot.ToImageHandler(sender, originalMsg) // Pass originalMsg
+			response = bot.ToImageHandler(sender, originalMsg)
 		} else {
 			response = "❌ Reply stiker dulu untuk dikonversi ke gambar"
 		}
@@ -326,7 +343,7 @@ Semoga harimu menyenangkan! 😊`,
 💬 Pesan diproses: **%d**
 ⏱️ Uptime: **%v**
 📈 Rata-rata: **%.1f** msg/menit
-⚡ Mode: Concurrent Processing
+⚡ Mode: WebP + Concurrent Processing
 🚀 Response time: < 500ms
 📱 Status: Online & Ready
 
@@ -358,6 +375,51 @@ Keep chatting! 🤖✨`,
 	} else {
 		fmt.Printf("ℹ️ No text response - media/action already sent\n")
 	}
+}
+
+// getToolsStatus - Get WebP tools installation status
+func (bot *WhatsAppBot) getToolsStatus() string {
+	status := "🔧 **WebP Tools Status**\n\n"
+
+	// Check cwebp
+	if bot.isToolAvailable("cwebp") {
+		status += "✅ cwebp: Installed\n"
+	} else {
+		status += "❌ cwebp: Not found\n"
+	}
+
+	// Check dwebp
+	if bot.isToolAvailable("dwebp") {
+		status += "✅ dwebp: Installed\n"
+	} else {
+		status += "❌ dwebp: Not found\n"
+	}
+
+	// Check ImageMagick
+	if bot.isToolAvailable("convert") {
+		status += "✅ ImageMagick: Installed\n"
+	} else {
+		status += "❌ ImageMagick: Not found\n"
+	}
+
+	status += "\n💡 **Install commands:**\n"
+	status += "Ubuntu: `sudo apt install webp imagemagick`\n"
+	status += "macOS: `brew install webp imagemagick`\n"
+	status += "Windows: Download WebP tools from Google\n\n"
+
+	if bot.isToolAvailable("cwebp") {
+		status += "🎯 WebP stickers: **ENABLED**"
+	} else {
+		status += "⚠️ WebP stickers: **FALLBACK MODE** (PNG)"
+	}
+
+	return status
+}
+
+// isToolAvailable - Check if external tool is available
+func (bot *WhatsAppBot) isToolAvailable(toolName string) bool {
+	_, err := exec.LookPath(toolName)
+	return err == nil
 }
 
 // Helper function to get week of year
@@ -448,9 +510,10 @@ func min(a, b int) int {
 }
 
 func main() {
-	fmt.Println("🤖 WhatsApp Bot - Enhanced Edition")
-	fmt.Println("⚡ Fast response & concurrent processing")
+	fmt.Println("🤖 WhatsApp Bot - WebP Tools Edition")
+	fmt.Println("⚡ Fast response & WebP sticker support")
 	fmt.Println("📱 Support multiple users simultaneously")
+	fmt.Println("🎯 Proper WebP/PNG sticker handling")
 	fmt.Println("=============================================")
 
 	bot := NewWhatsAppBot()
