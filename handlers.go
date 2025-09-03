@@ -1,4 +1,4 @@
-// handlers.go - Complete version with WebP tools support
+// handlers.go - Complete version with WebP tools support and reply functionality
 package main
 
 import (
@@ -30,21 +30,21 @@ func (bot *WhatsAppBot) StickerHandler(sender types.JID, msg *events.Message) st
 	imageData, err := bot.downloadImage(msg)
 	if err != nil {
 		fmt.Printf("❌ Failed to download image: %v\n", err)
-		return "❌ Gagal download gambar. Coba lagi ya!"
+		return "yah gagal download gambarnya nih. coba lagi ya"
 	}
 
 	// Convert to sticker (with WebP tools)
 	stickerData, err := bot.convertToStickerWebP(imageData)
 	if err != nil {
 		fmt.Printf("❌ Failed to convert to sticker: %v\n", err)
-		return "❌ Gagal convert ke sticker: " + err.Error()
+		return "waduh gagal convert ke sticker: " + err.Error()
 	}
 
 	// Send sticker
 	err = bot.sendSticker(msg.Info.Chat, stickerData, msg.Info.ID)
 	if err != nil {
 		fmt.Printf("❌ Failed to send sticker: %v\n", err)
-		return "❌ Gagal kirim sticker. Coba lagi!"
+		return "yah gagal kirim stickernya. coba lagi deh"
 	}
 
 	fmt.Printf("✅ Sticker sent successfully to +%s\n", sender.User)
@@ -59,52 +59,53 @@ func (bot *WhatsAppBot) ToImageHandler(sender types.JID, msg *events.Message) st
 	stickerData, err := bot.downloadSticker(msg)
 	if err != nil {
 		fmt.Printf("❌ Failed to download sticker: %v\n", err)
-		return "❌ Gagal download sticker. Coba lagi ya!"
+		return "yah gagal download stickernya. coba lagi ya"
 	}
 
 	// Convert to image (PNG)
 	imageData, err := bot.convertStickerToImageWebP(stickerData)
 	if err != nil {
 		fmt.Printf("❌ Failed to convert to image: %v\n", err)
-		return "❌ Gagal convert ke gambar!"
+		return "waduh gagal convert ke gambar nih"
 	}
 
 	// Send image
 	err = bot.sendImage(msg.Info.Chat, imageData, "converted_image.png", msg.Info.ID)
 	if err != nil {
 		fmt.Printf("❌ Failed to send image: %v\n", err)
-		return "❌ Gagal kirim gambar. Coba lagi!"
+		return "yah gagal kirim gambarnya. coba lagi deh"
 	}
 
 	fmt.Printf("✅ Image sent successfully to +%s\n", sender.User)
 	return ""
 }
 
-// TagAllHandler - Handle tag all
-func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID) string {
+// TagAllHandler - Handle tag all with reply functionality
+func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string) string {
 	fmt.Printf("👥 PROCESSING: Tag all members in group %s\n", chatJID.User)
 
 	groupInfo, err := bot.client.GetGroupInfo(chatJID)
 	if err != nil {
 		fmt.Printf("❌ Failed to get group info: %v\n", err)
-		return "❌ Gagal mendapatkan info grup"
+		return "yah gagal dapet info grupnya nih"
 	}
 
 	var mentions []string
-	mentionText := "📢 **ATTENTION EVERYONE** 📢\n\n"
+	mentionText := "halo semuanyaa ada yang penting nih\n\n"
 
 	for _, participant := range groupInfo.Participants {
 		mentions = append(mentions, participant.JID.String())
 		mentionText += fmt.Sprintf("@%s ", participant.JID.User)
 	}
 
-	mentionText += "\n\nSemua dipanggil! Ada yang penting nih 👋"
+	mentionText += "\n\nkok tag semua? ada apa emang?"
 
 	msg := &waProto.Message{
 		ExtendedTextMessage: &waProto.ExtendedTextMessage{
 			Text: proto.String(mentionText),
 			ContextInfo: &waProto.ContextInfo{
 				MentionedJID: mentions,
+				StanzaID:     proto.String(quotedMsgID), // Reply to the original message
 			},
 		},
 	}
@@ -112,7 +113,7 @@ func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID) string {
 	_, err = bot.client.SendMessage(context.Background(), chatJID, msg)
 	if err != nil {
 		fmt.Printf("❌ Failed to send mention message: %v\n", err)
-		return "❌ Gagal kirim mention. Coba lagi!"
+		return "yah gagal kirim mention. coba lagi deh"
 	}
 
 	fmt.Printf("✅ Tagged %d members successfully\n", len(mentions))
@@ -218,7 +219,7 @@ func (bot *WhatsAppBot) convertToStickerWebP(imageData []byte) ([]byte, error) {
 		img, err = png.Decode(reader)
 		inputPath += ".png"
 	} else {
-		return nil, fmt.Errorf("Format tidak didukung. Hanya JPG/PNG")
+		return nil, fmt.Errorf("format ga didukung. cuma JPG/PNG aja")
 	}
 
 	if err != nil {
@@ -630,7 +631,7 @@ func (bot *WhatsAppBot) sendImage(chatJID types.JID, imageData []byte, filename 
 			FileEncSHA256: uploaded.FileEncSHA256,
 			FileSHA256:    uploaded.FileSHA256,
 			FileLength:    proto.Uint64(uint64(len(imageData))),
-			Caption:       proto.String("✅ Converted from sticker"),
+			Caption:       proto.String("udah ku jadiin gambar nih"),
 			ContextInfo: &waProto.ContextInfo{
 				StanzaID: proto.String(quotedMsgID),
 			},
