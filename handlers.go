@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"go.mau.fi/whatsmeow"
@@ -80,8 +81,8 @@ func (bot *WhatsAppBot) ToImageHandler(sender types.JID, msg *events.Message) st
 	return ""
 }
 
-// TagAllHandler - Handle tag all with reply functionality
-func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string) string {
+// TagAllHandler - Handle tag all with reply functionality and include original message
+func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string, originalText string) string {
 	fmt.Printf("👥 PROCESSING: Tag all members in group %s\n", chatJID.User)
 
 	groupInfo, err := bot.client.GetGroupInfo(chatJID)
@@ -91,7 +92,14 @@ func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string) str
 	}
 
 	var mentions []string
-	mentionText := "halo semuanyaa ada yang penting nih\n\n"
+
+	// Include the original message text if it's not just "/tagall"
+	mentionText := ""
+	if originalText != "" && strings.ToLower(strings.TrimSpace(originalText)) != "/tagall" {
+		mentionText = originalText + "\n\n"
+	} else {
+		mentionText = "halo semuanyaa ada yang penting nih\n\n"
+	}
 
 	for _, participant := range groupInfo.Participants {
 		mentions = append(mentions, participant.JID.String())
