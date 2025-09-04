@@ -432,15 +432,15 @@ func (bot *WhatsAppBot) getCalendarInfo() string {
 
 	response := fmt.Sprintf(`📅 *Kalender Hari Ini - WIB*
 
-🗓️ *%s, %d %s %d*
-🕐 *Pukul: %s WIB*
+ *%s, %d %s %d*
+ *Pukul: %s WIB*
 
 📊 *Detail:*
 • Hari ke-%d dalam tahun %d
 • Minggu ke-%d dalam tahun
 • Kuartal ke-%d
 
-🌙 *Tanggal Hijriyah (perkiraan):*
+🌙 *Tanggal Hijriyah (masih pengembangan yaa all):*
 %d %s %d H
 
 ⏰ *Zona Waktu:*
