@@ -92,29 +92,31 @@ func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string, ori
 	}
 
 	var mentions []string
-
-	// Format pesan berdasarkan input
 	var mentionText string
 
 	if originalText != "" && strings.ToLower(strings.TrimSpace(originalText)) != "/tagall" {
-		// Jika ada pesan setelah /tagall, gunakan format: "pesan_user\nada pesan nih @mentions"
-		mentionText = originalText + "\nada pesan nih "
+		// Jika ada pesan setelah /tagall, gunakan format: "pesan_user\n\nada pesan nih\n@mentions\ntolong dibaca ya semuanya"
+		mentionText = originalText + "\n\nada pesan nih\n"
+
+		// Tambahkan semua mentions
+		for _, participant := range groupInfo.Participants {
+			mentions = append(mentions, participant.JID.String())
+			mentionText += fmt.Sprintf("@%s ", participant.JID.User)
+		}
+
+		mentionText += "\ntolong dibaca ya semuanya!!"
+
 	} else {
 		// Jika hanya "/tagall", gunakan format default
-		mentionText = "halo semuanyaa ada yang penting nih\n"
-	}
+		mentionText = "halo semuanyaa ada yang penting nih\n\n"
 
-	// Tambahkan semua mentions
-	for _, participant := range groupInfo.Participants {
-		mentions = append(mentions, participant.JID.String())
-		mentionText += fmt.Sprintf("@%s ", participant.JID.User)
-	}
+		// Tambahkan semua mentions
+		for _, participant := range groupInfo.Participants {
+			mentions = append(mentions, participant.JID.String())
+			mentionText += fmt.Sprintf("@%s ", participant.JID.User)
+		}
 
-	// Tambahkan penutup sesuai konteks
-	if originalText != "" && strings.ToLower(strings.TrimSpace(originalText)) != "/tagall" {
-		mentionText += "\ntolong dibaca ya semuanya"
-	} else {
-		mentionText += "\nkok tag semua? ada apa emang?"
+		mentionText += "\nkok tag semua? ada apa emang yaa?"
 	}
 
 	// Kirim pesan dengan reply ke pesan asli
