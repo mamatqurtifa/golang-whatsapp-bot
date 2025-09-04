@@ -317,16 +317,8 @@ semoga harimu menyenangkan ya! 😊`,
 
 	case "/tagall":
 		if isGroup {
-			// Extract the full message text after /tagall command
-			fullText := bot.extractMessageText(originalMsg)
-			if strings.Contains(fullText, "/tagall ") {
-				// Get text after "/tagall "
-				afterCommand := strings.TrimSpace(strings.SplitN(fullText, "/tagall ", 2)[1])
-				response = bot.TagAllHandler(chatJID, originalMsg.Info.ID, afterCommand)
-			} else {
-				// Just "/tagall" without additional text
-				response = bot.TagAllHandler(chatJID, originalMsg.Info.ID, "")
-			}
+			// Pass the original message to TagAllHandler for reply processing
+			response = bot.TagAllHandler(chatJID, originalMsg.Info.ID, originalMsg.Info.Sender.String())
 		} else {
 			response = "command /tagall cuma bisa dipake di grup ya"
 		}
