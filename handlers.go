@@ -1,4 +1,4 @@
-// handlers.go - Complete version with WebP tools support and reply functionality
+// handlers.go - Fixed version with proper reply functionality and corrected tagall format
 package main
 
 import (
@@ -81,7 +81,7 @@ func (bot *WhatsAppBot) ToImageHandler(sender types.JID, msg *events.Message) st
 	return ""
 }
 
-// TagAllHandler - Handle tag all with reply functionality and include original message
+// TagAllHandler - Handle tag all with corrected reply functionality and message format
 func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string, originalText string) string {
 	fmt.Printf("👥 PROCESSING: Tag all members in group %s\n", chatJID.User)
 
@@ -93,27 +93,41 @@ func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string, ori
 
 	var mentions []string
 
-	// Include the original message text if it's not just "/tagall"
-	mentionText := ""
+	// Format pesan berdasarkan input
+	var mentionText string
+
 	if originalText != "" && strings.ToLower(strings.TrimSpace(originalText)) != "/tagall" {
-		mentionText = originalText + "\n\n"
+		// Jika ada pesan setelah /tagall, gunakan format: "pesan_user\nada pesan nih @mentions"
+		mentionText = originalText + "\nada pesan nih "
 	} else {
-		mentionText = "halo semuanyaa ada yang penting nih\n\n"
+		// Jika hanya "/tagall", gunakan format default
+		mentionText = "halo semuanyaa ada yang penting nih\n"
 	}
 
+	// Tambahkan semua mentions
 	for _, participant := range groupInfo.Participants {
 		mentions = append(mentions, participant.JID.String())
 		mentionText += fmt.Sprintf("@%s ", participant.JID.User)
 	}
 
-	mentionText += "\n\nkok tag semua? ada apa emang?"
+	// Tambahkan penutup sesuai konteks
+	if originalText != "" && strings.ToLower(strings.TrimSpace(originalText)) != "/tagall" {
+		mentionText += "\ntolong dibaca ya semuanya"
+	} else {
+		mentionText += "\nkok tag semua? ada apa emang?"
+	}
 
+	// Kirim pesan dengan reply ke pesan asli
 	msg := &waProto.Message{
 		ExtendedTextMessage: &waProto.ExtendedTextMessage{
 			Text: proto.String(mentionText),
 			ContextInfo: &waProto.ContextInfo{
 				MentionedJID: mentions,
-				StanzaID:     proto.String(quotedMsgID), // Reply to the original message
+				StanzaID:     proto.String(quotedMsgID),      // Reply ke pesan asli
+				Participant:  proto.String(chatJID.String()), // Penting untuk grup
+				QuotedMessage: &waProto.Message{
+					Conversation: proto.String("tagall"),
+				},
 			},
 		},
 	}

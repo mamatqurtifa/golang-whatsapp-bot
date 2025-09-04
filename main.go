@@ -1,4 +1,4 @@
-// main.go - Updated version with WebP tools support and casual messaging
+// main.go - Updated version with proper reply functionality
 package main
 
 import (
@@ -365,12 +365,13 @@ keep chatting! 🤖`,
 		return // No response for unknown commands
 	}
 
+	// Send reply ONLY if there's a response and it's NOT empty
 	if response != "" {
 		fmt.Printf("📝 Preparing response (%d chars)\n", len(response))
 
-		// Send reply immediately
+		// Send reply immediately with proper context
 		go func() {
-			bot.sendReply(chatJID, response, originalMsg.Info.ID)
+			bot.sendReply(chatJID, response, originalMsg.Info.ID, sender)
 
 			processingTime := time.Since(startTime)
 			senderShort := sender.User
@@ -488,15 +489,26 @@ func (bot *WhatsAppBot) hasQuotedSticker(msg *events.Message) bool {
 	return false
 }
 
-func (bot *WhatsAppBot) sendReply(chatJID types.JID, text string, quotedMsgID string) {
+// sendReply - Send reply message with proper context info for group and DM
+func (bot *WhatsAppBot) sendReply(chatJID types.JID, text string, quotedMsgID string, quotedSender types.JID) {
 	fmt.Printf("📤 Sending reply: %s\n", text[:min(50, len(text))]+"...")
+
+	isGroup := strings.Contains(chatJID.String(), "@g.us")
+
+	// Create context info for reply
+	contextInfo := &waProto.ContextInfo{
+		StanzaID: proto.String(quotedMsgID),
+	}
+
+	// For group chats, add participant info
+	if isGroup {
+		contextInfo.Participant = proto.String(quotedSender.String())
+	}
 
 	msg := &waProto.Message{
 		ExtendedTextMessage: &waProto.ExtendedTextMessage{
-			Text: proto.String(text),
-			ContextInfo: &waProto.ContextInfo{
-				StanzaID: proto.String(quotedMsgID),
-			},
+			Text:        proto.String(text),
+			ContextInfo: contextInfo,
 		},
 	}
 
