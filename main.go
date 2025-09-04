@@ -1,4 +1,4 @@
-// main.go - Updated version with proper reply functionality
+// main.go - Updated version with proper reply functionality and calendar feature
 package main
 
 import (
@@ -228,6 +228,34 @@ func (bot *WhatsAppBot) extractMessageText(msg *events.Message) string {
 	return ""
 }
 
+// extractQuotedMessageText - Extract text from quoted/replied message
+func (bot *WhatsAppBot) extractQuotedMessageText(msg *events.Message) string {
+	// Check extended text message for context info (replies)
+	extendedMsg := msg.Message.GetExtendedTextMessage()
+	if extendedMsg != nil {
+		contextInfo := extendedMsg.GetContextInfo()
+		if contextInfo != nil {
+			quotedMsg := contextInfo.GetQuotedMessage()
+			if quotedMsg != nil {
+				// Try different quoted message types
+				if quotedMsg.GetConversation() != "" {
+					return quotedMsg.GetConversation()
+				}
+				if quotedMsg.GetExtendedTextMessage() != nil {
+					return quotedMsg.GetExtendedTextMessage().GetText()
+				}
+				if quotedMsg.GetImageMessage() != nil {
+					return quotedMsg.GetImageMessage().GetCaption()
+				}
+				if quotedMsg.GetVideoMessage() != nil {
+					return quotedMsg.GetVideoMessage().GetCaption()
+				}
+			}
+		}
+	}
+	return ""
+}
+
 func (bot *WhatsAppBot) processCommand(chatJID, sender types.JID, command string, isGroup bool, originalMsg *events.Message) {
 	parts := strings.Split(strings.TrimSpace(command), " ")
 	if len(parts) == 0 {
@@ -250,7 +278,7 @@ Commands:
 /sticker atau /s - gambar ke stiker (WebP)
 /toimg - stiker ke gambar
 /tagall - mention semua (grup only)
-/calendar - tanggal hari ini
+/calendar - tanggal hari ini WIB
 /stats - statistik bot
 /tools - cek WebP tools
 
@@ -267,7 +295,7 @@ aku bot yang bisa bantu convert sticker dengan WebP!
 • /sticker atau /s - konversi gambar/gif ke stiker WebP 
 • /toimg - konversi stiker ke gambar PNG
 • /tagall - mention semua member (grup only)
-• /calendar - info tanggal hari ini
+• /calendar - info tanggal hari ini WIB
 • /stats - statistik bot
 • /tools - cek status WebP tools
 
@@ -301,24 +329,14 @@ simple tapi works! 😌`
 		fmt.Printf("✅ Responding to toimg command\n")
 
 	case "/calendar":
-		now := time.Now()
-		response = fmt.Sprintf(`📅 *%s*
-🕐 %s WIB
-📊 hari ke-%d tahun %d
-🗓️ minggu ke-%d
-
-semoga harimu menyenangkan ya! 😊`,
-			now.Format("Monday, 2 January 2006"),
-			now.Format("15:04:05"),
-			now.YearDay(),
-			now.Year(),
-			getWeekOfYear(now))
+		response = bot.getCalendarInfo()
 		fmt.Printf("✅ Responding to calendar command\n")
 
 	case "/tagall":
 		if isGroup {
-			// Pass the original message to TagAllHandler for reply processing
-			response = bot.TagAllHandler(chatJID, originalMsg.Info.ID, originalMsg.Info.Sender.String())
+			// Get the quoted message text for tagall
+			quotedText := bot.extractQuotedMessageText(originalMsg)
+			response = bot.TagAllHandler(chatJID, originalMsg.Info.ID, quotedText)
 		} else {
 			response = "command /tagall cuma bisa dipake di grup ya"
 		}
@@ -377,6 +395,119 @@ keep chatting! 🤖`,
 	}
 }
 
+// getCalendarInfo - Get calendar information for WIB timezone
+func (bot *WhatsAppBot) getCalendarInfo() string {
+	// Set timezone to WIB (UTC+7)
+	wib, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		// Fallback to manual UTC+7 offset
+		wib = time.FixedZone("WIB", 7*60*60)
+	}
+
+	now := time.Now().In(wib)
+
+	// Indonesian day names
+	dayNames := []string{
+		"Minggu", "Senin", "Selasa", "Rabu",
+		"Kamis", "Jumat", "Sabtu",
+	}
+
+	// Indonesian month names
+	monthNames := []string{
+		"", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+		"Juli", "Agustus", "September", "Oktober", "November", "Desember",
+	}
+
+	dayName := dayNames[now.Weekday()]
+	monthName := monthNames[now.Month()]
+
+	// Calculate week of year
+	_, week := now.ISOWeek()
+
+	// Calculate day of year
+	dayOfYear := now.YearDay()
+
+	// Get Hijri date approximation (simple calculation)
+	hijriYear, hijriMonth, hijriDay := getHijriDate(now)
+
+	response := fmt.Sprintf(`📅 *Kalender Hari Ini - WIB*
+
+🗓️ *%s, %d %s %d*
+🕐 *Pukul: %s WIB*
+
+📊 *Detail:*
+• Hari ke-%d dalam tahun %d
+• Minggu ke-%d dalam tahun
+• Kuartal ke-%d
+
+🌙 *Tanggal Hijriyah (perkiraan):*
+%d %s %d H
+
+⏰ *Zona Waktu:*
+Waktu Indonesia Barat (WIB)
+UTC +7
+
+semoga harimu berkah ya! 🤲`,
+		dayName, now.Day(), monthName, now.Year(),
+		now.Format("15:04:05"),
+		dayOfYear, now.Year(),
+		week,
+		((int(now.Month())-1)/3)+1,
+		hijriDay, getHijriMonthName(hijriMonth), hijriYear)
+
+	return response
+}
+
+// getHijriDate - Simple Hijri date approximation
+func getHijriDate(gregorianDate time.Time) (int, int, int) {
+	// Simple approximation - not astronomically accurate
+	// Based on approximate 354.37 days per Hijri year
+
+	// Reference date: July 16, 622 CE = 1 Muharram 1 AH
+	hijriEpoch := time.Date(622, 7, 16, 0, 0, 0, 0, time.UTC)
+	daysSinceEpoch := gregorianDate.Sub(hijriEpoch).Hours() / 24
+
+	// Approximate Hijri year (354.37 days per year)
+	hijriYear := int(daysSinceEpoch/354.37) + 1
+
+	// Approximate remaining days in current Hijri year
+	remainingDays := int(daysSinceEpoch) % 354
+
+	// Approximate month and day (30/29 day months alternating)
+	hijriMonth := 1
+	hijriDay := remainingDays
+
+	monthDays := []int{30, 29, 30, 29, 30, 29, 30, 29, 30, 29, 30, 29}
+
+	for i, days := range monthDays {
+		if hijriDay <= days {
+			hijriMonth = i + 1
+			break
+		}
+		hijriDay -= days
+	}
+
+	if hijriDay == 0 {
+		hijriDay = 1
+	}
+
+	return hijriYear, hijriMonth, hijriDay
+}
+
+// getHijriMonthName - Get Hijri month name in Indonesian
+func getHijriMonthName(month int) string {
+	monthNames := []string{
+		"", "Muharram", "Safar", "Rabiul Awal", "Rabiul Akhir",
+		"Jumadil Awal", "Jumadil Akhir", "Rajab", "Syaban",
+		"Ramadan", "Syawal", "Dzulkaidah", "Dzulhijjah",
+	}
+
+	if month >= 1 && month <= 12 {
+		return monthNames[month]
+	}
+	return "Unknown"
+}
+
 // getToolsStatus - Get WebP tools installation status
 func (bot *WhatsAppBot) getToolsStatus() string {
 	status := "🔧 *WebP Tools Status*\n\n"
@@ -420,12 +551,6 @@ func (bot *WhatsAppBot) getToolsStatus() string {
 func (bot *WhatsAppBot) isToolAvailable(toolName string) bool {
 	_, err := exec.LookPath(toolName)
 	return err == nil
-}
-
-// Helper function to get week of year
-func getWeekOfYear(t time.Time) int {
-	_, week := t.ISOWeek()
-	return week
 }
 
 func (bot *WhatsAppBot) hasQuotedImage(msg *events.Message) bool {
@@ -525,6 +650,7 @@ func main() {
 	fmt.Println("⚡ fast response & WebP sticker support")
 	fmt.Println("📱 support multiple users simultaneously")
 	fmt.Println("🎯 proper WebP/PNG sticker handling")
+	fmt.Println("📅 calendar info with WIB timezone")
 	fmt.Println("=============================================")
 
 	bot := NewWhatsAppBot()

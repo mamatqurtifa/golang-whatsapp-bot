@@ -82,7 +82,7 @@ func (bot *WhatsAppBot) ToImageHandler(sender types.JID, msg *events.Message) st
 }
 
 // TagAllHandler - Handle tag all with corrected reply functionality and message format
-func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string, originalText string) string {
+func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string, quotedText string) string {
 	fmt.Printf("👥 PROCESSING: Tag all members in group %s\n", chatJID.User)
 
 	groupInfo, err := bot.client.GetGroupInfo(chatJID)
@@ -94,11 +94,14 @@ func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string, ori
 	var mentions []string
 	var mentionText string
 
-	if originalText != "" && strings.ToLower(strings.TrimSpace(originalText)) != "/tagall" {
-		// Jika ada pesan setelah /tagall, gunakan format: "pesan_user\n\nada pesan nih\n@mentions\ntolong dibaca ya semuanya"
-		mentionText = originalText + "\n\nada pesan nih\n"
+	// Check if there's quoted text from the replied message
+	if quotedText != "" && strings.TrimSpace(quotedText) != "" {
+		fmt.Printf("📝 Using quoted message text: '%s'\n", quotedText)
 
-		// Tambahkan semua mentions
+		// Format: "quoted_message\n\nada pesan nih\n@mentions\ntolong dibaca ya semuanya"
+		mentionText = quotedText + "\n\nada pesan nih\n"
+
+		// Add all mentions
 		for _, participant := range groupInfo.Participants {
 			mentions = append(mentions, participant.JID.String())
 			mentionText += fmt.Sprintf("@%s ", participant.JID.User)
@@ -107,10 +110,12 @@ func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string, ori
 		mentionText += "\ntolong dibaca ya semuanya!!"
 
 	} else {
-		// Jika hanya "/tagall", gunakan format default
+		fmt.Printf("📝 No quoted text, using default tagall message\n")
+
+		// Default format when no specific message is quoted
 		mentionText = "halo semuanyaa ada yang penting nih\n\n"
 
-		// Tambahkan semua mentions
+		// Add all mentions
 		for _, participant := range groupInfo.Participants {
 			mentions = append(mentions, participant.JID.String())
 			mentionText += fmt.Sprintf("@%s ", participant.JID.User)
@@ -119,14 +124,14 @@ func (bot *WhatsAppBot) TagAllHandler(chatJID types.JID, quotedMsgID string, ori
 		mentionText += "\nkok tag semua? ada apa emang yaa?"
 	}
 
-	// Kirim pesan dengan reply ke pesan asli
+	// Send message with reply to the original message
 	msg := &waProto.Message{
 		ExtendedTextMessage: &waProto.ExtendedTextMessage{
 			Text: proto.String(mentionText),
 			ContextInfo: &waProto.ContextInfo{
 				MentionedJID: mentions,
-				StanzaID:     proto.String(quotedMsgID),      // Reply ke pesan asli
-				Participant:  proto.String(chatJID.String()), // Penting untuk grup
+				StanzaID:     proto.String(quotedMsgID),      // Reply to original message
+				Participant:  proto.String(chatJID.String()), // Important for groups
 				QuotedMessage: &waProto.Message{
 					Conversation: proto.String("tagall"),
 				},
