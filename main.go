@@ -216,9 +216,8 @@ func (bot *WhatsAppBot) handleMessage(msg *events.Message) {
 	// NEW COMMAND FILTERING RULES:
 	if messageText != "" && strings.HasPrefix(messageText, "/") {
 		if isOksobatGroup {
-			// OksobatSIJA Exclusive: BLOCK ALL "/" commands
-			fmt.Printf("🚫 BLOCKED: OksobatSIJA Exclusive - all '/' commands not allowed, use '.' instead\n")
-			bot.sendReply(chatJID, "gunakan perintah dengan '.' untuk grup eksklusif ini ya", msg.Info.ID, sender)
+			// OksobatSIJA Exclusive: BLOCK ALL "/" commands - NO RESPONSE
+			fmt.Printf("🚫 BLOCKED: OksobatSIJA Exclusive - all '/' commands not allowed (silent)\n")
 			fmt.Println("----------------------------------------")
 			return
 		} else {
