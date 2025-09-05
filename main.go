@@ -274,7 +274,18 @@ func (bot *WhatsAppBot) processCommand(chatJID, sender types.JID, command string
 
 	switch cmd {
 	case "/hi":
-		response = `halo! 👋
+		// Check if it's a group first
+		if isGroup {
+			// Try to get group info to get the actual group name
+			groupInfo, err := bot.client.GetGroupInfo(chatJID)
+			if err == nil {
+				// Check if this is the "Slaviors Chat" group
+				if strings.Contains(groupInfo.Name, "Slaviors Chat") {
+					response = `haloo Slaviors members. aku bot dari mamat yang bakal nemenin grup ini biar ga sepi  ^_^`
+					fmt.Printf("✅ Responding to /hi command in Slaviors Chat group\n")
+				} else {
+					// Default group response
+					response = `halo grup! 👋
 
 Commands:
 /help - bantuan lengkap
@@ -286,8 +297,48 @@ Commands:
 /stats - statistik bot
 /tools - cek WebP tools
 
+bot siap melayani grup ini! 🤖`
+					fmt.Printf("✅ Responding to /hi command (default group)\n")
+				}
+			} else {
+				// Fallback if can't get group info - check using JID User (less reliable)
+				if strings.Contains(chatJID.User, "Slaviors") || strings.Contains(strings.ToLower(chatJID.User), "slaviors") {
+					response = `haloo Slaviors members. aku bot dari mamat yang bakal nemenin grup ini biar ga sepi  ^_^`
+					fmt.Printf("✅ Responding to /hi command in Slaviors Chat group (fallback detection)\n")
+				} else {
+					// Default group response
+					response = `halo grup! 👋
+
+Commands:
+/help - bantuan lengkap
+/hi - sapa bot  
+/sticker atau /s - gambar ke stiker (WebP)
+/toimg - stiker ke gambar
+/tagall - mention semua (grup only)
+/calendar - tanggal hari ini WIB
+/stats - statistik bot
+/tools - cek WebP tools
+
+bot siap melayani grup ini! 🤖`
+					fmt.Printf("✅ Responding to /hi command (default group, fallback)\n")
+				}
+			}
+		} else {
+			// Default DM response
+			response = `halo! 👋
+
+Commands:
+/help - bantuan lengkap
+/hi - sapa bot  
+/sticker atau /s - gambar ke stiker (WebP)
+/toimg - stiker ke gambar
+/calendar - tanggal hari ini WIB
+/stats - statistik bot
+/tools - cek WebP tools
+
 bot siap melayani nih! 🤖`
-		fmt.Printf("✅ Responding to /hi command\n")
+			fmt.Printf("✅ Responding to /hi command (DM)\n")
+		}
 
 	case "/help":
 		response = `🤖 WhatsApp Bot Helper - WebP Edition
