@@ -376,41 +376,137 @@ simple tapi works! 😌`
 		fmt.Printf("✅ Responding to sticker command\n")
 
 	case "/toimg":
-		if bot.hasQuotedSticker(originalMsg) {
-			response = bot.ToImageHandler(sender, originalMsg)
+		// Check if this is the "OksobatSIJA Exclusive Edition💎" group
+		if isGroup {
+			groupInfo, err := bot.client.GetGroupInfo(chatJID)
+			if err == nil && (strings.Contains(groupInfo.Name, "OksobatSIJA Exclusive Edition") || strings.Contains(groupInfo.Name, "OksobatSIJA")) {
+				response = `command "/" tidak aktif di grup ini. gunakan ".toimg" sebagai gantinya`
+				fmt.Printf("✅ Blocking /toimg command in OksobatSIJA group\n")
+			} else {
+				if bot.hasQuotedSticker(originalMsg) {
+					response = bot.ToImageHandler(sender, originalMsg)
+				} else {
+					response = "reply stiker dulu biar bisa dikonversi ke gambar"
+				}
+				fmt.Printf("✅ Responding to /toimg command (default)\n")
+			}
 		} else {
-			response = "reply stiker dulu biar bisa dikonversi ke gambar"
+			if bot.hasQuotedSticker(originalMsg) {
+				response = bot.ToImageHandler(sender, originalMsg)
+			} else {
+				response = "reply stiker dulu biar bisa dikonversi ke gambar"
+			}
+			fmt.Printf("✅ Responding to /toimg command (DM)\n")
 		}
-		fmt.Printf("✅ Responding to toimg command\n")
+
+	case ".toimg":
+		// Only works in OksobatSIJA group
+		if isGroup {
+			groupInfo, err := bot.client.GetGroupInfo(chatJID)
+			if err == nil && (strings.Contains(groupInfo.Name, "OksobatSIJA Exclusive Edition") || strings.Contains(groupInfo.Name, "OksobatSIJA")) {
+				if bot.hasQuotedSticker(originalMsg) {
+					response = bot.ToImageHandler(sender, originalMsg)
+				} else {
+					response = "reply stiker dulu biar bisa dikonversi ke gambar"
+				}
+				fmt.Printf("✅ Responding to .toimg command in OksobatSIJA group\n")
+			} else {
+				response = `grup ini pake command dengan "/" ya. coba /toimg`
+				fmt.Printf("✅ Suggesting / commands for non-OksobatSIJA group\n")
+			}
+		} else {
+			response = `untuk chat pribadi gunakan command dengan "/" ya. coba /toimg`
+			fmt.Printf("✅ Suggesting / commands for DM\n")
+		}
 
 	case "/calendar":
-		response = bot.getCalendarInfo()
-		fmt.Printf("✅ Responding to calendar command\n")
+		// Check if this is the "OksobatSIJA Exclusive Edition💎" group
+		if isGroup {
+			groupInfo, err := bot.client.GetGroupInfo(chatJID)
+			if err == nil && (strings.Contains(groupInfo.Name, "OksobatSIJA Exclusive Edition") || strings.Contains(groupInfo.Name, "OksobatSIJA")) {
+				response = `command "/" tidak aktif di grup ini. gunakan ".calendar" sebagai gantinya`
+				fmt.Printf("✅ Blocking /calendar command in OksobatSIJA group\n")
+			} else {
+				response = bot.getCalendarInfo()
+				fmt.Printf("✅ Responding to /calendar command (default)\n")
+			}
+		} else {
+			response = bot.getCalendarInfo()
+			fmt.Printf("✅ Responding to /calendar command (DM)\n")
+		}
+
+	case ".calendar":
+		// Only works in OksobatSIJA group
+		if isGroup {
+			groupInfo, err := bot.client.GetGroupInfo(chatJID)
+			if err == nil && (strings.Contains(groupInfo.Name, "OksobatSIJA Exclusive Edition") || strings.Contains(groupInfo.Name, "OksobatSIJA")) {
+				response = bot.getCalendarInfo()
+				fmt.Printf("✅ Responding to .calendar command in OksobatSIJA group\n")
+			} else {
+				response = `grup ini pake command dengan "/" ya. coba /calendar`
+				fmt.Printf("✅ Suggesting / commands for non-OksobatSIJA group\n")
+			}
+		} else {
+			response = `untuk chat pribadi gunakan command dengan "/" ya. coba /calendar`
+			fmt.Printf("✅ Suggesting / commands for DM\n")
+		}
 
 	case "/tagall":
+		// Check if this is the "OksobatSIJA Exclusive Edition💎" group
 		if isGroup {
-			// Get the quoted message text for tagall
-			quotedText := bot.extractQuotedMessageText(originalMsg)
-			response = bot.TagAllHandler(chatJID, originalMsg.Info.ID, quotedText)
+			groupInfo, err := bot.client.GetGroupInfo(chatJID)
+			if err == nil && (strings.Contains(groupInfo.Name, "OksobatSIJA Exclusive Edition") || strings.Contains(groupInfo.Name, "OksobatSIJA")) {
+				response = `command "/" tidak aktif di grup ini. gunakan ".tagall" sebagai gantinya`
+				fmt.Printf("✅ Blocking /tagall command in OksobatSIJA group\n")
+			} else {
+				// Get the quoted message text for tagall
+				quotedText := bot.extractQuotedMessageText(originalMsg)
+				response = bot.TagAllHandler(chatJID, originalMsg.Info.ID, quotedText)
+				fmt.Printf("✅ Responding to /tagall command (default)\n")
+			}
 		} else {
 			response = "command /tagall cuma bisa dipake di grup ya"
 		}
-		fmt.Printf("✅ Responding to tagall command\n")
 
-	case "/stats":
-		bot.mutex.RLock()
-		count := bot.processedMessages
-		bot.mutex.RUnlock()
-		uptime := time.Since(bot.startTime)
-
-		// Calculate messages per minute
-		minutes := uptime.Minutes()
-		msgPerMin := float64(0)
-		if minutes > 0 {
-			msgPerMin = float64(count) / minutes
+	case ".tagall":
+		// Only works in OksobatSIJA group
+		if isGroup {
+			groupInfo, err := bot.client.GetGroupInfo(chatJID)
+			if err == nil && (strings.Contains(groupInfo.Name, "OksobatSIJA Exclusive Edition") || strings.Contains(groupInfo.Name, "OksobatSIJA")) {
+				// Get the quoted message text for tagall
+				quotedText := bot.extractQuotedMessageText(originalMsg)
+				response = bot.TagAllHandler(chatJID, originalMsg.Info.ID, quotedText)
+				fmt.Printf("✅ Responding to .tagall command in OksobatSIJA group\n")
+			} else {
+				response = `grup ini pake command dengan "/" ya. coba /tagall`
+				fmt.Printf("✅ Suggesting / commands for non-OksobatSIJA group\n")
+			}
+		} else {
+			response = `untuk chat pribadi gunakan command dengan "/" ya`
+			fmt.Printf("✅ Suggesting / commands for DM\n")
 		}
 
-		response = fmt.Sprintf(`📊 *Bot Statistics*
+	case "/stats":
+		// Check if this is the "OksobatSIJA Exclusive Edition💎" group
+		if isGroup {
+			groupInfo, err := bot.client.GetGroupInfo(chatJID)
+			if err == nil && (strings.Contains(groupInfo.Name, "OksobatSIJA Exclusive Edition") || strings.Contains(groupInfo.Name, "OksobatSIJA")) {
+				response = `command "/" tidak aktif di grup ini. gunakan ".stats" sebagai gantinya`
+				fmt.Printf("✅ Blocking /stats command in OksobatSIJA group\n")
+			} else {
+				bot.mutex.RLock()
+				count := bot.processedMessages
+				bot.mutex.RUnlock()
+				uptime := time.Since(bot.startTime)
+
+				// Calculate messages per minute
+				minutes := uptime.Minutes()
+				msgPerMin := float64(0)
+				if minutes > 0 {
+					msgPerMin = float64(count) / minutes
+				}
+
+				response = fmt.Sprintf(`📊 *Bot Statistics*
 
 💬 pesan diproses: *%d*
 ⏱️ uptime: *%v*
@@ -420,10 +516,79 @@ simple tapi works! 😌`
 📱 status: online & ready
 
 keep chatting! 🤖`,
-			count,
-			uptime.Truncate(time.Second),
-			msgPerMin)
-		fmt.Printf("✅ Responding to stats command\n")
+					count,
+					uptime.Truncate(time.Second),
+					msgPerMin)
+				fmt.Printf("✅ Responding to /stats command (default)\n")
+			}
+		} else {
+			bot.mutex.RLock()
+			count := bot.processedMessages
+			bot.mutex.RUnlock()
+			uptime := time.Since(bot.startTime)
+
+			// Calculate messages per minute
+			minutes := uptime.Minutes()
+			msgPerMin := float64(0)
+			if minutes > 0 {
+				msgPerMin = float64(count) / minutes
+			}
+
+			response = fmt.Sprintf(`📊 *Bot Statistics*
+
+💬 pesan diproses: *%d*
+⏱️ uptime: *%v*
+📈 rata-rata: *%.1f* msg/menit
+⚡ mode: WebP + concurrent processing
+🚀 response time: < 500ms
+📱 status: online & ready
+
+keep chatting! 🤖`,
+				count,
+				uptime.Truncate(time.Second),
+				msgPerMin)
+			fmt.Printf("✅ Responding to /stats command (DM)\n")
+		}
+
+	case ".stats":
+		// Only works in OksobatSIJA group
+		if isGroup {
+			groupInfo, err := bot.client.GetGroupInfo(chatJID)
+			if err == nil && (strings.Contains(groupInfo.Name, "OksobatSIJA Exclusive Edition") || strings.Contains(groupInfo.Name, "OksobatSIJA")) {
+				bot.mutex.RLock()
+				count := bot.processedMessages
+				bot.mutex.RUnlock()
+				uptime := time.Since(bot.startTime)
+
+				// Calculate messages per minute
+				minutes := uptime.Minutes()
+				msgPerMin := float64(0)
+				if minutes > 0 {
+					msgPerMin = float64(count) / minutes
+				}
+
+				response = fmt.Sprintf(`📊 *Bot Statistics*
+
+💬 pesan diproses: *%d*
+⏱️ uptime: *%v*
+📈 rata-rata: *%.1f* msg/menit
+⚡ mode: WebP + concurrent processing
+🚀 response time: < 500ms
+📱 status: online & ready
+
+bot eksklusif untuk OksobatSIJA! 💎`,
+					count,
+					uptime.Truncate(time.Second),
+					msgPerMin)
+				fmt.Printf("✅ Responding to .stats command in OksobatSIJA group\n")
+			} else {
+				response = `grup ini pake command dengan "/" ya. coba /stats`
+				fmt.Printf("✅ Suggesting / commands for non-OksobatSIJA group\n")
+			}
+		} else {
+			response = `untuk chat pribadi gunakan command dengan "/" ya. coba /stats`
+			fmt.Printf("✅ Suggesting / commands for DM\n")
+		}
 
 	default:
 		fmt.Printf("❓ Unknown command: %s\n", cmd)
