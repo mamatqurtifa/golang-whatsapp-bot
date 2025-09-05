@@ -1,4 +1,4 @@
-// main.go - Updated version with new command rules
+// main.go - Animated sticker WhatsApp bot with full WebP support
 package main
 
 import (
@@ -82,7 +82,8 @@ func (bot *WhatsAppBot) isOksobatSIJAGroup(chatJID types.JID) bool {
 }
 
 func (bot *WhatsAppBot) Start() {
-	fmt.Println("🤖 WhatsApp Bot - WebP Enhanced Edition")
+	fmt.Println("🤖 WhatsApp Bot - Animated Sticker Edition")
+	fmt.Println("🎞️ GIF → Animated WebP Sticker Support")
 	fmt.Println("========================================")
 
 	// Check WebP tools availability
@@ -344,7 +345,7 @@ func (bot *WhatsAppBot) processCommand(chatJID, sender types.JID, command string
 
 Commands untuk grup eksklusif ini:
 .hi - menu utama
-.sticker atau .s - konversi gambar/gif ke stiker WebP 
+.sticker atau .s - konversi gambar/gif ke stiker WebP (ANIMATED!)
 .toimg - konversi stiker ke gambar PNG
 .tagall - mention semua member
 .calendar - info tanggal hari ini WIB
@@ -358,7 +359,7 @@ special bot untuk OksobatSIJA Exclusive only! 🤖✨`
 
 Commands utama (dot commands):
 .hi - menu utama
-.sticker atau .s - gambar ke stiker (WebP)
+.sticker atau .s - gambar/gif ke stiker (ANIMATED WebP)
 .toimg - stiker ke gambar
 .tagall - mention semua (grup only)
 .calendar - tanggal hari ini WIB
@@ -372,7 +373,7 @@ bot siap melayani grup ini! 🤖`
 
 Commands utama (dot commands):
 .hi - menu utama
-.sticker atau .s - gambar ke stiker (WebP)
+.sticker atau .s - gambar/gif ke stiker (ANIMATED WebP)
 .toimg - stiker ke gambar
 .calendar - tanggal hari ini WIB
 .stats - statistik bot
@@ -390,51 +391,55 @@ aku bot eksklusif untuk grup OksobatSIJA!
 
 📋 Commands (dot commands):
 • .hi - menu utama
-• .sticker atau .s - konversi gambar/gif ke stiker WebP 
+• .sticker atau .s - konversi gambar/gif ke stiker WebP (ANIMATED!)
 • .toimg - konversi stiker ke gambar PNG
 • .tagall - mention semua member
 • .calendar - info tanggal hari ini WIB
 • .stats - statistik bot
 • .tools - cek status WebP tools
 
-🎯 Features:
-• WebP sticker support (cwebp/dwebp)
-• auto-resize ke 512x512
-• fallback ke PNG kalo WebP gagal
-• support JPEG, PNG, WebP input
+🎞️ Fitur Animated Sticker:
+• GIF → Animated WebP sticker (bergerak!)
+• Video → Animated WebP sticker
+• Image → Static WebP sticker
+• Auto-resize ke 512x512
+• Fallback ke PNG jika WebP gagal
+• Support gif2webp & FFmpeg
 
 special untuk OksobatSIJA Exclusive only! 💎✨`
 		} else {
-			response = `🤖 WhatsApp Bot Helper - Dot Commands Edition
+			response = `🤖 WhatsApp Bot Helper - Animated Sticker Edition
 
-aku bot yang bisa bantu convert sticker dengan WebP!
+aku bot yang bisa convert sticker dengan WebP + animasi!
 
 📋 Commands (dot commands):
 • .hi - menu utama
-• .sticker atau .s - konversi gambar/gif ke stiker WebP 
+• .sticker atau .s - konversi gambar/gif ke stiker WebP (ANIMATED!)
 • .toimg - konversi stiker ke gambar PNG
 • .tagall - mention semua member (grup only)
 • .calendar - info tanggal hari ini WIB
 • .stats - statistik bot
 • .tools - cek status WebP tools
 
-🎯 Features:
-• WebP sticker support (cwebp/dwebp)
-• auto-resize ke 512x512
-• fallback ke PNG kalo WebP gagal
-• support JPEG, PNG, WebP input
+🎞️ Fitur Animated Sticker:
+• GIF → Animated WebP sticker (bergerak!)
+• Video → Animated WebP sticker
+• Image → Static WebP sticker
+• Auto-resize ke 512x512
+• Support gif2webp & FFmpeg
+• Fallback ke PNG jika tools tidak ada
 
 💡 Note: Beberapa perintah lama masih tersedia:
 /help, /sticker, /s, /tagall
 
-simple tapi works! 😌`
+animated stickers ftw! 🎞️✨`
 		}
 
 	case ".sticker", ".s":
 		if bot.hasQuotedImage(originalMsg) {
 			response = bot.StickerHandler(sender, originalMsg)
 		} else {
-			response = "reply gambar atau gif dulu dong biar bisa dijadiin stiker WebP"
+			response = "reply gambar, gif, atau video dulu dong biar bisa dijadiin stiker WebP (animated!)"
 		}
 
 	case ".toimg":
@@ -468,6 +473,14 @@ simple tapi works! 😌`
 			msgPerMin = float64(count) / minutes
 		}
 
+		// Check animation support
+		animationSupport := "❌ disabled"
+		if bot.isToolAvailable("gif2webp") {
+			animationSupport = "✅ gif2webp"
+		} else if bot.isToolAvailable("ffmpeg") {
+			animationSupport = "⚠️ ffmpeg only"
+		}
+
 		extraText := ""
 		if isOksobatGroup {
 			extraText = "\nbot eksklusif untuk OksobatSIJA! 💎"
@@ -478,14 +491,16 @@ simple tapi works! 😌`
 💬 pesan diproses: *%d*
 ⏱️ uptime: *%v*
 📈 rata-rata: *%.1f* msg/menit
+🎞️ animated stickers: %s
 ⚡ mode: WebP + concurrent processing
 🚀 response time: < 500ms
 📱 status: online & ready%s
 
-keep chatting! 🤖`,
+keep sending GIFs! 🎞️🤖`,
 			count,
 			uptime.Truncate(time.Second),
 			msgPerMin,
+			animationSupport,
 			extraText)
 
 	case ".tools":
@@ -500,24 +515,29 @@ perintah utama sudah pindah ke dot commands!
 
 📋 Commands baru (dot commands):
 • .hi - menu utama
-• .sticker atau .s - konversi gambar/gif ke stiker WebP 
+• .sticker atau .s - konversi gambar/gif ke stiker WebP (ANIMATED!)
 • .toimg - konversi stiker ke gambar PNG
 • .tagall - mention semua member (grup only)
 • .calendar - info tanggal hari ini WIB
 • .stats - statistik bot
 • .tools - cek status WebP tools
 
+🎞️ NEW: Animated sticker support!
+• GIF → Bergerak di WhatsApp
+• Video → Animated sticker
+• Image → Static sticker
+
 💡 Perintah legacy yang masih tersedia:
 /help, /sticker, /s, /tagall
 
-gunakan .help untuk bantuan lengkap! 😌`
+gunakan .help untuk bantuan lengkap! 🎞️✨`
 
 	case "/sticker", "/s":
 		// Only allowed in non-OksobatSIJA chats
 		if bot.hasQuotedImage(originalMsg) {
 			response = bot.StickerHandler(sender, originalMsg)
 		} else {
-			response = "reply gambar atau gif dulu dong biar bisa dijadiin stiker WebP"
+			response = "reply gambar, gif, atau video dulu dong biar bisa dijadiin stiker WebP (animated!)"
 		}
 
 	case "/tagall":
@@ -729,9 +749,16 @@ func (bot *WhatsAppBot) getHijriMonthName(month int) string {
 	return "Unknown"
 }
 
-// getToolsStatus - Get WebP tools installation status
+// getToolsStatus - Get WebP tools installation status with animation focus
 func (bot *WhatsAppBot) getToolsStatus() string {
 	status := "🔧 *WebP Tools Status*\n\n"
+
+	// Check gif2webp (MOST IMPORTANT for animated stickers)
+	if bot.isToolAvailable("gif2webp") {
+		status += "✅ gif2webp: installed (ANIMATED STICKERS ENABLED!)\n"
+	} else {
+		status += "❌ gif2webp: not found (ANIMATED STICKERS DISABLED)\n"
+	}
 
 	// Check cwebp
 	if bot.isToolAvailable("cwebp") {
@@ -747,31 +774,46 @@ func (bot *WhatsAppBot) getToolsStatus() string {
 		status += "❌ dwebp: not found\n"
 	}
 
+	// Check FFmpeg with libwebp
+	if bot.isToolAvailable("ffmpeg") {
+		status += "✅ ffmpeg: installed"
+		// Test libwebp support
+		cmd := exec.Command("ffmpeg", "-codecs")
+		output, err := cmd.CombinedOutput()
+		if err == nil && strings.Contains(string(output), "libwebp") {
+			status += " (with libwebp - animation fallback)\n"
+		} else {
+			status += " (libwebp support unknown)\n"
+		}
+	} else {
+		status += "❌ ffmpeg: not found\n"
+	}
+
 	// Check ImageMagick
 	if bot.isToolAvailable("convert") {
-		status += "✅ ImageMagick: installed\n"
+		status += "✅ ImageMagick: installed (static fallback)\n"
 	} else {
 		status += "❌ ImageMagick: not found\n"
 	}
 
-	status += "\n💡 *install commands:*\n"
-	status += "ubuntu: `sudo apt install webp imagemagick`\n"
-	status += "macOS: `brew install webp imagemagick`\n"
-	status += "windows: download WebP tools dari google\n\n"
-
-	if bot.isToolAvailable("cwebp") {
-		status += "🎯 WebP stickers: *enabled*"
+	status += "\n🎞️ *Animation Status:*\n"
+	if bot.isToolAvailable("gif2webp") {
+		status += "✅ *FULL ANIMATED SUPPORT* via gif2webp\n"
+	} else if bot.isToolAvailable("ffmpeg") {
+		status += "⚠️ *LIMITED ANIMATED SUPPORT* via ffmpeg\n"
 	} else {
-		status += "⚠️ WebP stickers: *fallback mode* (PNG)"
+		status += "❌ *NO ANIMATED SUPPORT* - static only\n"
 	}
 
-	return status
-}
+	status += "\n💡 *Install commands:*\n"
+	status += "ubuntu: `sudo apt install webp imagemagick ffmpeg`\n"
+	status += "macOS: `brew install webp imagemagick ffmpeg`\n"
+	status += "windows: download WebP tools + FFmpeg\n\n"
 
-// isToolAvailable - Check if external tool is available
-func (bot *WhatsAppBot) isToolAvailable(toolName string) bool {
-	_, err := exec.LookPath(toolName)
-	return err == nil
+	status += "🏆 *Untuk animated sticker terbaik:*\n"
+	status += "gif2webp adalah tool resmi Google untuk WebP animasi!"
+
+	return status
 }
 
 func (bot *WhatsAppBot) hasQuotedImage(msg *events.Message) bool {
@@ -867,13 +909,15 @@ func min(a, b int) int {
 }
 
 func main() {
-	fmt.Println("🤖 WhatsApp Bot - Dot Commands Edition")
-	fmt.Println("⚡ fast response & WebP sticker support")
+	fmt.Println("🤖 WhatsApp Bot - Animated Sticker Edition")
+	fmt.Println("🎞️ GIF → Animated WebP Sticker Support")
+	fmt.Println("⚡ fast response & WebP sticker handling")
 	fmt.Println("📱 support multiple users simultaneously")
-	fmt.Println("🎯 proper WebP/PNG sticker handling")
+	fmt.Println("🎯 proper WebP/PNG sticker handling with animation")
 	fmt.Println("📅 calendar info with WIB timezone")
 	fmt.Println("💎 special OksobatSIJA Exclusive support")
 	fmt.Println("🔄 new command system: '.' for all, limited '/' legacy")
+	fmt.Println("🎞️ gif2webp + FFmpeg support for best animated stickers")
 	fmt.Println("=============================================")
 
 	bot := NewWhatsAppBot()
