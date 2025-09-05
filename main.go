@@ -3,8 +3,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -31,6 +33,7 @@ type WhatsAppBot struct {
 	mutex             sync.RWMutex
 	processedMessages int64
 	startTime         time.Time
+	httpClient        *http.Client
 }
 
 func NewWhatsAppBot() *WhatsAppBot {
@@ -52,6 +55,7 @@ func NewWhatsAppBot() *WhatsAppBot {
 		client:      client,
 		rateLimiter: make(chan struct{}, 50), // Increased rate limit
 		startTime:   time.Now(),
+		httpClient:  &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
@@ -395,7 +399,7 @@ keep chatting! 🤖`,
 	}
 }
 
-// getCalendarInfo - Get calendar information for WIB timezone
+// getCalendarInfo - Get calendar information for WIB timezone with Hijri API
 func (bot *WhatsAppBot) getCalendarInfo() string {
 	// Set timezone to WIB (UTC+7)
 	wib, err := time.LoadLocation("Asia/Jakarta")
@@ -427,21 +431,21 @@ func (bot *WhatsAppBot) getCalendarInfo() string {
 	// Calculate day of year
 	dayOfYear := now.YearDay()
 
-	// Get Hijri date approximation (simple calculation)
-	hijriYear, hijriMonth, hijriDay := getHijriDate(now)
+	// Get Hijri date from API
+	hijriInfo := bot.getHijriDateFromAPI(now)
 
 	response := fmt.Sprintf(`📅 *Kalender Hari Ini - WIB*
 
- *%s, %d %s %d*
- *Pukul: %s WIB*
+🗓️ *%s, %d %s %d*
+🕐 *Pukul: %s WIB*
 
 📊 *Detail:*
 • Hari ke-%d dalam tahun %d
 • Minggu ke-%d dalam tahun
 • Kuartal ke-%d
 
-🌙 *Tanggal Hijriyah (masih pengembangan yaa all):*
-%d %s %d H
+🌙 *Tanggal Hijriyah:*
+%s
 
 ⏰ *Zona Waktu:*
 Waktu Indonesia Barat (WIB)
@@ -453,17 +457,81 @@ semoga harimu berkah ya! 🤲`,
 		dayOfYear, now.Year(),
 		week,
 		((int(now.Month())-1)/3)+1,
-		hijriDay, getHijriMonthName(hijriMonth), hijriYear)
+		hijriInfo)
 
 	return response
 }
 
-// getHijriDate - Simple Hijri date approximation
-func getHijriDate(gregorianDate time.Time) (int, int, int) {
-	// Simple approximation - not astronomically accurate
-	// Based on approximate 354.37 days per Hijri year
+// getHijriDateFromAPI - Get accurate Hijri date from MyQuran API
+func (bot *WhatsAppBot) getHijriDateFromAPI(date time.Time) string {
+	fmt.Printf("🌙 Fetching Hijri date from MyQuran API...\n")
 
-	// Reference date: July 16, 622 CE = 1 Muharram 1 AH
+	// Format date as YYYY-MM-DD for API
+	apiURL := "https://api.myquran.com/v2/cal/hijr"
+
+	// Create HTTP request
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		fmt.Printf("❌ Failed to create request: %v\n", err)
+		return bot.getFallbackHijriDate(date)
+	}
+
+	// Add query parameter for specific date (if API supports it)
+	// For now, we'll use current date as API seems to return current date by default
+
+	// Make request with timeout
+	resp, err := bot.httpClient.Do(req)
+	if err != nil {
+		fmt.Printf("❌ API request failed: %v\n", err)
+		return bot.getFallbackHijriDate(date)
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != 200 {
+		fmt.Printf("❌ API returned status: %d\n", resp.StatusCode)
+		return bot.getFallbackHijriDate(date)
+	}
+
+	// Parse JSON response
+	// Define HijriAPIResponse struct to match API response
+	type HijriAPIResponse struct {
+		Status bool `json:"status"`
+		Data   struct {
+			Date []string `json:"date"`
+		} `json:"data"`
+	}
+
+	var apiResp HijriAPIResponse
+	err = json.NewDecoder(resp.Body).Decode(&apiResp)
+	if err != nil {
+		fmt.Printf("❌ Failed to parse JSON: %v\n", err)
+		return bot.getFallbackHijriDate(date)
+	}
+
+	// Check if API call was successful
+	if !apiResp.Status {
+		fmt.Printf("❌ API returned error status\n")
+		return bot.getFallbackHijriDate(date)
+	}
+
+	// Extract Hijri information
+	if len(apiResp.Data.Date) >= 2 {
+		hijriDay := apiResp.Data.Date[0]  // e.g., "Jum'at"
+		hijriDate := apiResp.Data.Date[1] // e.g., "12 Rabiul Awal 1447 H"
+
+		fmt.Printf("✅ Hijri date fetched successfully: %s\n", hijriDate)
+		return fmt.Sprintf("%s, %s", hijriDay, hijriDate)
+	}
+
+	// Fallback if data format is unexpected
+	fmt.Printf("⚠️ Unexpected API response format, using fallback\n")
+	return bot.getFallbackHijriDate(date)
+}
+
+// getFallbackHijriDate - Fallback Hijri date calculation if API fails
+func (bot *WhatsAppBot) getFallbackHijriDate(gregorianDate time.Time) string {
+	// Simple approximation - not astronomically accurate
 	hijriEpoch := time.Date(622, 7, 16, 0, 0, 0, 0, time.UTC)
 	daysSinceEpoch := gregorianDate.Sub(hijriEpoch).Hours() / 24
 
@@ -473,7 +541,7 @@ func getHijriDate(gregorianDate time.Time) (int, int, int) {
 	// Approximate remaining days in current Hijri year
 	remainingDays := int(daysSinceEpoch) % 354
 
-	// Approximate month and day (30/29 day months alternating)
+	// Approximate month and day
 	hijriMonth := 1
 	hijriDay := remainingDays
 
@@ -491,11 +559,13 @@ func getHijriDate(gregorianDate time.Time) (int, int, int) {
 		hijriDay = 1
 	}
 
-	return hijriYear, hijriMonth, hijriDay
+	hijriMonthName := bot.getHijriMonthName(hijriMonth)
+
+	return fmt.Sprintf("*%d %s %d H* (perkiraan - API gagal)", hijriDay, hijriMonthName, hijriYear)
 }
 
 // getHijriMonthName - Get Hijri month name in Indonesian
-func getHijriMonthName(month int) string {
+func (bot *WhatsAppBot) getHijriMonthName(month int) string {
 	monthNames := []string{
 		"", "Muharram", "Safar", "Rabiul Awal", "Rabiul Akhir",
 		"Jumadil Awal", "Jumadil Akhir", "Rajab", "Syaban",
