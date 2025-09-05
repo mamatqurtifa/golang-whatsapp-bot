@@ -1,4 +1,4 @@
-// main.go - Updated version with improved OksobatSIJA detection and command blocking
+// main.go - Fixed version with complete dot commands for OksobatSIJA group
 package main
 
 import (
@@ -220,20 +220,23 @@ func (bot *WhatsAppBot) handleMessage(msg *events.Message) {
 
 	fmt.Printf("📊 Total processed: %d\n", currentCount)
 
-	// SPECIAL RULE: In OksobatSIJA group, ignore ALL "/" commands
-	if isOksobatGroup && messageText != "" && strings.HasPrefix(messageText, "/") {
-		fmt.Printf("🚫 BLOCKED: OksobatSIJA group - ignoring / command: %s\n", strings.Split(messageText, " ")[0])
-		fmt.Println("----------------------------------------")
-		return
+	// SPECIAL RULE: In OksobatSIJA group, ONLY allow dot commands and block /tagall and /help
+	if isOksobatGroup && messageText != "" {
+		if strings.HasPrefix(messageText, "/tagall") || strings.HasPrefix(messageText, "/help") {
+			fmt.Printf("🚫 BLOCKED: OksobatSIJA group - /tagall and /help not allowed\n")
+			fmt.Println("----------------------------------------")
+			return
+		}
+		if strings.HasPrefix(messageText, "/") && !strings.HasPrefix(messageText, "/tagall") && !strings.HasPrefix(messageText, "/help") {
+			fmt.Printf("🚫 BLOCKED: OksobatSIJA group - use dot commands instead of /\n")
+			fmt.Println("----------------------------------------")
+			return
+		}
 	}
 
-	// Check if it's a command (for other groups and DMs)
-	if messageText != "" && strings.HasPrefix(messageText, "/") {
+	// Check if it's a command
+	if messageText != "" && (strings.HasPrefix(messageText, "/") || strings.HasPrefix(messageText, ".")) {
 		fmt.Printf("⚡ Processing command: %s\n", strings.Split(messageText, " ")[0])
-		bot.processCommand(chatJID, sender, messageText, isGroup, msg)
-	} else if messageText != "" && strings.HasPrefix(messageText, ".") {
-		// Handle dot commands (mainly for OksobatSIJA group)
-		fmt.Printf("⚡ Processing dot command: %s\n", strings.Split(messageText, " ")[0])
 		bot.processCommand(chatJID, sender, messageText, isGroup, msg)
 	} else if messageText == "" {
 		fmt.Printf("⚠️ Empty message received - might be media/unsupported type\n")
@@ -327,8 +330,8 @@ func (bot *WhatsAppBot) processCommand(chatJID, sender types.JID, command string
 		if isGroup {
 			if isOksobatGroup {
 				// This shouldn't happen due to the block above, but just in case
-				fmt.Printf("🚫 /hi blocked in OksobatSIJA group\n")
-				return
+				fmt.Printf("🚫 /hi blocked in OksobatSIJA group - use .hi instead\n")
+				response = "gunakan .hi untuk OksobatSIJA group ya"
 			} else {
 				// Try to get group info to get the actual group name
 				groupInfo, err := bot.client.GetGroupInfo(chatJID)
@@ -389,13 +392,36 @@ bot siap melayani nih! 🤖`
 			fmt.Printf("✅ Responding to /hi command (DM)\n")
 		}
 
-	case "/help":
+	case ".hi":
+		// Only works in OksobatSIJA group, suggest / commands elsewhere
 		if isOksobatGroup {
-			fmt.Printf("🚫 /help blocked in OksobatSIJA group\n")
-			return
+			response = `halo OksobatSIJA! 💎
+
+Commands untuk grup ekslusif ini:
+.hi - menu utama
+.sticker atau .s - konversi gambar/gif ke stiker WebP 
+.toimg - konversi stiker ke gambar PNG
+.tagall - mention semua member
+.calendar - info tanggal hari ini WIB
+.stats - statistik bot
+.tools - cek status WebP tools
+
+special bot untuk OksobatSIJA only! 🤖✨`
+			fmt.Printf("✅ Responding to .hi command in OksobatSIJA group\n")
+		} else if isGroup {
+			response = `grup ini pake command dengan "/" ya. coba /hi`
+			fmt.Printf("✅ Suggesting / commands for non-OksobatSIJA group\n")
+		} else {
+			response = `untuk chat pribadi gunakan command dengan "/" ya. coba /hi`
+			fmt.Printf("✅ Suggesting / commands for DM\n")
 		}
 
-		response = `🤖 WhatsApp Bot Helper - WebP Edition
+	case "/help":
+		if isOksobatGroup {
+			fmt.Printf("🚫 /help not allowed in OksobatSIJA group - use .help instead\n")
+			response = "gunakan .help untuk OksobatSIJA group ya"
+		} else {
+			response = `🤖 WhatsApp Bot Helper - WebP Edition
 
 aku bot yang bisa bantu convert sticker dengan WebP!
 
@@ -415,42 +441,102 @@ aku bot yang bisa bantu convert sticker dengan WebP!
 • support JPEG, PNG, WebP input
 
 simple tapi works! 😌`
-		fmt.Printf("✅ Responding to /help command\n")
+			fmt.Printf("✅ Responding to /help command\n")
+		}
+
+	case ".help":
+		// Only works in OksobatSIJA group
+		if isOksobatGroup {
+			response = `🤖 WhatsApp Bot Helper - OksobatSIJA Edition 💎
+
+aku bot eksklusif untuk grup OksobatSIJA!
+
+📋 Commands:
+• .hi - menu utama
+• .sticker atau .s - konversi gambar/gif ke stiker WebP 
+• .toimg - konversi stiker ke gambar PNG
+• .tagall - mention semua member
+• .calendar - info tanggal hari ini WIB
+• .stats - statistik bot
+• .tools - cek status WebP tools
+
+🎯 Features:
+• WebP sticker support (cwebp/dwebp)
+• auto-resize ke 512x512
+• fallback ke PNG kalo WebP gagal
+• support JPEG, PNG, WebP input
+
+special untuk OksobatSIJA only! 💎✨`
+			fmt.Printf("✅ Responding to .help command in OksobatSIJA group\n")
+		} else if isGroup {
+			response = `grup ini pake command dengan "/" ya. coba /help`
+			fmt.Printf("✅ Suggesting / commands for non-OksobatSIJA group\n")
+		} else {
+			response = `untuk chat pribadi gunakan command dengan "/" ya. coba /help`
+			fmt.Printf("✅ Suggesting / commands for DM\n")
+		}
 
 	case "/tools":
 		if isOksobatGroup {
-			fmt.Printf("🚫 /tools blocked in OksobatSIJA group\n")
-			return
+			response = "gunakan .tools untuk OksobatSIJA group ya"
+		} else {
+			response = bot.getToolsStatus()
+			fmt.Printf("✅ Responding to /tools command\n")
 		}
 
-		response = bot.getToolsStatus()
-		fmt.Printf("✅ Responding to /tools command\n")
+	case ".tools":
+		// Only works in OksobatSIJA group
+		if isOksobatGroup {
+			response = bot.getToolsStatus()
+			fmt.Printf("✅ Responding to .tools command in OksobatSIJA group\n")
+		} else if isGroup {
+			response = `grup ini pake command dengan "/" ya. coba /tools`
+			fmt.Printf("✅ Suggesting / commands for non-OksobatSIJA group\n")
+		} else {
+			response = `untuk chat pribadi gunakan command dengan "/" ya. coba /tools`
+			fmt.Printf("✅ Suggesting / commands for DM\n")
+		}
 
 	case "/s", "/sticker":
 		if isOksobatGroup {
-			fmt.Printf("🚫 /sticker blocked in OksobatSIJA group\n")
-			return
+			response = "gunakan .s atau .sticker untuk OksobatSIJA group ya"
+		} else {
+			if bot.hasQuotedImage(originalMsg) {
+				response = bot.StickerHandler(sender, originalMsg)
+			} else {
+				response = "reply gambar atau gif dulu dong biar bisa dijadiin stiker WebP"
+			}
+			fmt.Printf("✅ Responding to sticker command\n")
 		}
 
-		if bot.hasQuotedImage(originalMsg) {
-			response = bot.StickerHandler(sender, originalMsg)
+	case ".s", ".sticker":
+		// Only works in OksobatSIJA group
+		if isOksobatGroup {
+			if bot.hasQuotedImage(originalMsg) {
+				response = bot.StickerHandler(sender, originalMsg)
+			} else {
+				response = "reply gambar atau gif dulu dong biar bisa dijadiin stiker WebP"
+			}
+			fmt.Printf("✅ Responding to .sticker command in OksobatSIJA group\n")
+		} else if isGroup {
+			response = `grup ini pake command dengan "/" ya. coba /sticker atau /s`
+			fmt.Printf("✅ Suggesting / commands for non-OksobatSIJA group\n")
 		} else {
-			response = "reply gambar atau gif dulu dong biar bisa dijadiin stiker WebP"
+			response = `untuk chat pribadi gunakan command dengan "/" ya. coba /sticker`
+			fmt.Printf("✅ Suggesting / commands for DM\n")
 		}
-		fmt.Printf("✅ Responding to sticker command\n")
 
 	case "/toimg":
 		if isOksobatGroup {
-			fmt.Printf("🚫 /toimg blocked in OksobatSIJA group\n")
-			return
-		}
-
-		if bot.hasQuotedSticker(originalMsg) {
-			response = bot.ToImageHandler(sender, originalMsg)
+			response = "gunakan .toimg untuk OksobatSIJA group ya"
 		} else {
-			response = "reply stiker dulu biar bisa dikonversi ke gambar"
+			if bot.hasQuotedSticker(originalMsg) {
+				response = bot.ToImageHandler(sender, originalMsg)
+			} else {
+				response = "reply stiker dulu biar bisa dikonversi ke gambar"
+			}
+			fmt.Printf("✅ Responding to /toimg command\n")
 		}
-		fmt.Printf("✅ Responding to /toimg command\n")
 
 	case ".toimg":
 		// Only works in OksobatSIJA group
@@ -471,12 +557,11 @@ simple tapi works! 😌`
 
 	case "/calendar":
 		if isOksobatGroup {
-			fmt.Printf("🚫 /calendar blocked in OksobatSIJA group\n")
-			return
+			response = "gunakan .calendar untuk OksobatSIJA group ya"
+		} else {
+			response = bot.getCalendarInfo()
+			fmt.Printf("✅ Responding to /calendar command\n")
 		}
-
-		response = bot.getCalendarInfo()
-		fmt.Printf("✅ Responding to /calendar command\n")
 
 	case ".calendar":
 		// Only works in OksobatSIJA group
@@ -493,11 +578,9 @@ simple tapi works! 😌`
 
 	case "/tagall":
 		if isOksobatGroup {
-			fmt.Printf("🚫 /tagall blocked in OksobatSIJA group\n")
-			return
-		}
-
-		if isGroup {
+			fmt.Printf("🚫 /tagall not allowed in OksobatSIJA group - use .tagall instead\n")
+			response = "gunakan .tagall untuk OksobatSIJA group ya"
+		} else if isGroup {
 			// Get the quoted message text for tagall
 			quotedText := bot.extractQuotedMessageText(originalMsg)
 			response = bot.TagAllHandler(chatJID, originalMsg.Info.ID, quotedText)
@@ -523,23 +606,21 @@ simple tapi works! 😌`
 
 	case "/stats":
 		if isOksobatGroup {
-			fmt.Printf("🚫 /stats blocked in OksobatSIJA group\n")
-			return
-		}
+			response = "gunakan .stats untuk OksobatSIJA group ya"
+		} else {
+			bot.mutex.RLock()
+			count := bot.processedMessages
+			bot.mutex.RUnlock()
+			uptime := time.Since(bot.startTime)
 
-		bot.mutex.RLock()
-		count := bot.processedMessages
-		bot.mutex.RUnlock()
-		uptime := time.Since(bot.startTime)
+			// Calculate messages per minute
+			minutes := uptime.Minutes()
+			msgPerMin := float64(0)
+			if minutes > 0 {
+				msgPerMin = float64(count) / minutes
+			}
 
-		// Calculate messages per minute
-		minutes := uptime.Minutes()
-		msgPerMin := float64(0)
-		if minutes > 0 {
-			msgPerMin = float64(count) / minutes
-		}
-
-		response = fmt.Sprintf(`📊 *Bot Statistics*
+			response = fmt.Sprintf(`📊 *Bot Statistics*
 
 💬 pesan diproses: *%d*
 ⏱️ uptime: *%v*
@@ -549,10 +630,11 @@ simple tapi works! 😌`
 📱 status: online & ready
 
 keep chatting! 🤖`,
-			count,
-			uptime.Truncate(time.Second),
-			msgPerMin)
-		fmt.Printf("✅ Responding to /stats command\n")
+				count,
+				uptime.Truncate(time.Second),
+				msgPerMin)
+			fmt.Printf("✅ Responding to /stats command\n")
+		}
 
 	case ".stats":
 		// Only works in OksobatSIJA group
